@@ -29,15 +29,6 @@
       linear-gradient(180deg, var(--navy-950) 0%, var(--navy-900) 55%, var(--navy-950) 100%);
   }
 
-  /* Hero keeps its pre-M1C.1 620px copy width regardless of pacing tier. Overriding
-     max-width directly (not --scene-copy-width) wins on selector specificity alone —
-     Origin still receives the sparse rhythm/spacing behavior from data-pacing;
-     only its copy width is carved out. Composition changes for Origin are reserved
-     for the dedicated M1C.2 milestone. */
-  .scene--hero .scene__copy {
-    max-width: 620px;
-  }
-
   .scene__art {
     position: absolute;
     inset: 0;
@@ -212,6 +203,80 @@
   .scene[data-pacing='dense'] {
     --scene-rhythm: 12px;
     --scene-copy-width: 720px;
+  }
+
+  /* Scene composition (Milestone M1C.2) — a concern separate from pacing. Pacing
+     governs density/rhythm/width *within* a scene's own tier; composition governs
+     content placement and narrative emphasis, explicitly assigned per scene in
+     config.js and never derived from pacing. Where a composition sets its own copy
+     width below, that intentionally overrides the pacing-driven --scene-copy-width
+     for that scene — pacing continues to govern rhythm, proof-point spacing, and
+     stats spacing underneath every composition. */
+
+  /* FOCUS (Origin) — a deliberate, controlled entry statement. Fixed at the
+     pre-M1C.2 620px regardless of pacing tier, left-anchored (never centered), so
+     it never competes with the future command-center media's left-side quiet zone.
+     This is the same rule that previously lived under .scene--hero — Origin is the
+     only scene with this composition, so consolidating it here makes the override
+     explicit rather than an incidental hero carve-out. */
+  .scene[data-composition='focus'] .scene__copy {
+    max-width: 620px;
+  }
+
+  /* OPERATIONAL (Pickup, Final Mile) — moderately contained and scannable. Caps
+     width so it can never grow as wide as an expansive scene, but otherwise defers
+     to pacing's own width (620px light / 660px medium) — pacing alone
+     differentiates Pickup from Final Mile; the two intentionally share this
+     composition. */
+  .scene[data-composition='operational'] .scene__copy {
+    max-width: min(var(--scene-copy-width, 620px), 680px);
+  }
+
+  /* SPLIT (Sorting) — reserves a deliberate portion of the scene for content
+     rather than widening indefinitely, previewing the media/content relationship a
+     future still or video will occupy here. Percentage-based so it scales with the
+     viewport; collapses to the normal pacing-driven width below 640px, where there
+     is no "other half" of the scene left to reserve. */
+  .scene[data-composition='split'] .scene__copy {
+    max-width: clamp(480px, 48vw, 560px);
+  }
+
+  @media (max-width: 639px) {
+    .scene[data-composition='split'] .scene__copy {
+      max-width: var(--scene-copy-width, 620px);
+    }
+  }
+
+  /* EXPANSIVE (Ground, Air) — broader and lower, leaving room for future wide
+     cinematic environments. Wider ceiling than operational; bottom-anchored on
+     desktop/tablet for a spatial, establishing-shot feel. Ground and Air share this
+     composition on purpose — their own pacing (dense vs medium-dense) and existing
+     content (Ground's 4 proof points vs Air's none) keep them visually distinct
+     without resorting to opposite-side placement. Reverts to centered on short or
+     narrow viewports (matching route-rail.css's existing 560px short-viewport
+     threshold) so bottom-anchored content never crowds a small screen. */
+  .scene[data-composition='expansive'] {
+    align-items: flex-end;
+    padding-block-end: 64px;
+  }
+
+  .scene[data-composition='expansive'] .scene__copy {
+    max-width: min(var(--scene-copy-width, 700px), 760px);
+  }
+
+  @media (max-width: 639px), (max-height: 560px) {
+    .scene[data-composition='expansive'] {
+      align-items: center;
+      padding-block-end: 0;
+    }
+  }
+
+  /* RESOLUTION (Delivered) — calm and CTA-focused, but deliberately distinct from
+     Origin's FOCUS: it takes no copy-width override at all, so it uses the sparse
+     pacing tier's own 560px (narrower than Origin's fixed 620px) rather than a
+     bespoke centered marketing-card treatment. Only the CTA gets extra emphasis. */
+  .scene[data-composition='resolution'] .scene__cta {
+    margin-top: 40px;
   }
 
   .scene__proof-points {

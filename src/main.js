@@ -97,7 +97,7 @@ function renderScene(scene, isHero) {
   const accentStyle = scene.accent ? ` style="--scene-accent: ${scene.accent}"` : '';
 
   return `
-    <section id="scene-${scene.id}" data-scene-id="${scene.id}" data-pacing="${scene.pacing}" class="${sceneClass}" aria-labelledby="scene-${scene.id}-title"${accentStyle}>
+    <section id="scene-${scene.id}" data-scene-id="${scene.id}" data-pacing="${scene.pacing}" data-composition="${scene.composition}" class="${sceneClass}" aria-labelledby="scene-${scene.id}-title"${accentStyle}>
       ${renderSceneArt(scene, isHero)}
       <div class="scene__copy">
         <p class="scene__eyebrow">${scene.eyebrow}</p>

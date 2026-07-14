@@ -13,6 +13,12 @@
 // calmer so heavier content reads cleanly. Values: 'sparse' | 'light' | 'medium' |
 // 'medium-dense' | 'dense'.
 //
+// `composition` is a separate, explicitly hand-assigned concern from `pacing` — it is
+// never derived from it. Where `pacing` governs density/rhythm/breathing room,
+// `composition` governs content placement, alignment, and narrative emphasis (see
+// world.css's `[data-composition]` rules). Values: 'focus' | 'operational' | 'split' |
+// 'expansive' | 'resolution'.
+//
 // `accent` is a brand-token hex reused to tint each scene's decorative glow, giving the
 // seven CSS-authored placeholder environments a subtly distinct identity ahead of real
 // generated art. Omitted on the hero scene, which uses its own fixed glow colors.
@@ -31,6 +37,7 @@ export const SCENES = [
     index: 1,
     label: 'Origin',
     pacing: 'sparse',
+    composition: 'focus',
     eyebrow: 'TransRoyal Network',
     title: 'Enter the Network',
     body: 'Every shipment begins inside the network built to move it — coordinated, monitored, and never out of sight.',
@@ -48,6 +55,7 @@ export const SCENES = [
     index: 2,
     label: 'Pickup',
     pacing: 'light',
+    composition: 'operational',
     eyebrow: 'Shipment Prepared',
     title: 'Begin Your Journey',
     body: 'One scan starts the chain of custody — labeled, logged, and handed into the network within minutes of pickup.',
@@ -62,6 +70,7 @@ export const SCENES = [
     index: 3,
     label: 'Sorting',
     pacing: 'medium',
+    composition: 'split',
     eyebrow: 'Processing Hub',
     title: 'Built for Precision',
     body: 'Automated routing reads every label and sends each shipment down the fastest verified path — built to remove error, not just add speed.',
@@ -81,6 +90,7 @@ export const SCENES = [
     index: 4,
     label: 'Ground',
     pacing: 'dense',
+    composition: 'expansive',
     eyebrow: 'Regional Network',
     title: 'Moving What Matters',
     body: 'A fleet in constant motion covers the ground between hubs. Regional lanes run on fixed schedules with live coordination, keeping freight moving even when a single route is delayed.',
@@ -100,6 +110,7 @@ export const SCENES = [
     index: 5,
     label: 'Global',
     pacing: 'medium-dense',
+    composition: 'expansive',
     eyebrow: 'International Reach',
     title: 'Connected Beyond Borders',
     body: 'Where the regional network becomes a global one — air cargo links TransRoyal hubs to destinations far beyond the region.',
@@ -113,6 +124,7 @@ export const SCENES = [
     index: 6,
     label: 'Final Mile',
     pacing: 'medium',
+    composition: 'operational',
     eyebrow: 'Almost There',
     title: 'Visibility at Every Step',
     body: 'Into the destination city, on the last leg of the journey — status follows every shipment the whole way, visible anytime through Track Shipment.',
@@ -128,6 +140,7 @@ export const SCENES = [
     index: 7,
     label: 'Delivered',
     pacing: 'sparse',
+    composition: 'resolution',
     eyebrow: 'Successful Delivery',
     title: 'Delivered with Confidence',
     body: 'Delivered — and ready to ship with TransRoyal again. Every shipment on the network is backed by the same standard of care.',
