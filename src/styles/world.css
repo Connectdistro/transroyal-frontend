@@ -29,6 +29,15 @@
       linear-gradient(180deg, var(--navy-950) 0%, var(--navy-900) 55%, var(--navy-950) 100%);
   }
 
+  /* Hero keeps its pre-M1C.1 620px copy width regardless of pacing tier. Overriding
+     max-width directly (not --scene-copy-width) wins on selector specificity alone —
+     Origin still receives the sparse rhythm/spacing behavior from data-pacing;
+     only its copy width is carved out. Composition changes for Origin are reserved
+     for the dedicated M1C.2 milestone. */
+  .scene--hero .scene__copy {
+    max-width: 620px;
+  }
+
   .scene__art {
     position: absolute;
     inset: 0;
@@ -122,25 +131,25 @@
   .scene__copy {
     position: relative;
     z-index: 1;
-    max-width: 620px;
+    max-width: var(--scene-copy-width, 620px);
   }
 
   .scene__eyebrow {
     color: var(--accent-strong);
     font-weight: 600;
-    font-size: 0.85rem;
+    font-size: var(--text-xs);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     margin-bottom: 14px;
   }
 
   .scene__body {
-    margin-top: 16px;
+    margin-top: var(--scene-rhythm, 16px);
     max-width: 640px;
   }
 
   .scene--hero .scene__body {
-    font-size: 1.15rem;
+    font-size: var(--text-md);
     margin-top: 18px;
     max-width: 480px;
   }
@@ -151,6 +160,7 @@
     color: var(--white);
     text-decoration: none;
     font-weight: 600;
+    font-size: var(--text-sm);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-sm);
     padding: 12px 20px;
@@ -172,15 +182,47 @@
     border-top: 1px solid var(--border-subtle);
   }
 
+  /* Pacing-aware vertical rhythm and copy width (Milestone M1C.1). Makes the
+     sparse -> dense -> sparse rhythm from config.js's `pacing` field visually
+     perceptible through spacing and width alone: sparse scenes get a narrower
+     column and looser rhythm between eyebrow/body/proof-points/stats; dense
+     scenes get a wider column and tighter rhythm. Never touches horizontal
+     alignment, the left/lower-left media safe zone, or adds animation/DOM —
+     that's reserved for the full composition system in a later milestone. */
+  .scene[data-pacing='sparse'] {
+    --scene-rhythm: 22px;
+    --scene-copy-width: 560px;
+  }
+
+  .scene[data-pacing='light'] {
+    --scene-rhythm: 19px;
+    --scene-copy-width: 620px;
+  }
+
+  .scene[data-pacing='medium'] {
+    --scene-rhythm: 16px;
+    --scene-copy-width: 660px;
+  }
+
+  .scene[data-pacing='medium-dense'] {
+    --scene-rhythm: 14px;
+    --scene-copy-width: 700px;
+  }
+
+  .scene[data-pacing='dense'] {
+    --scene-rhythm: 12px;
+    --scene-copy-width: 720px;
+  }
+
   .scene__proof-points {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 22px;
+    gap: calc(var(--scene-rhythm, 16px) * 0.5);
+    margin-top: var(--scene-rhythm, 22px);
   }
 
   .scene__proof-points li {
-    font-size: 0.82rem;
+    font-size: var(--text-xs);
     font-weight: 600;
     color: var(--text-muted);
     background: var(--surface-glass);
@@ -193,7 +235,7 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
     gap: 24px;
-    margin-top: 28px;
+    margin-top: var(--scene-rhythm, 28px);
     max-width: 480px;
   }
 
@@ -201,7 +243,7 @@
     display: block;
     font-family: var(--font-heading);
     font-weight: 600;
-    font-size: clamp(1.5rem, 2vw + 1rem, 2.1rem);
+    font-size: var(--text-xl);
     color: var(--white);
     letter-spacing: -0.01em;
   }
@@ -209,7 +251,7 @@
   .scene__stat-label {
     display: block;
     margin-top: 4px;
-    font-size: 0.78rem;
+    font-size: var(--text-2xs);
     color: var(--text-dim);
     text-transform: uppercase;
     letter-spacing: 0.05em;

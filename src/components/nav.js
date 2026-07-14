@@ -1,7 +1,7 @@
 const NAV_LINKS = [
-  { href: '#services', label: 'Services' },
-  { href: '#network', label: 'Network' },
-  { href: '#journey', label: 'Journey' },
+  { href: '#scene-ground', label: 'Services' },
+  { href: '#scene-air', label: 'Network' },
+  { href: '#scene-origin', label: 'Journey' },
   { href: '#contact', label: 'Contact' },
 ];
 
