@@ -1,61 +1,140 @@
-// Single source of truth for the seven-scene shipment journey.
-// route-rail.js reads this today; the future scroll-scrub engine (Milestone 3) will
-// read the same array and attach `clip`/`still`/`poster` fields once assets exist.
+// Single source of truth for the seven-scene TransRoyal shipment-journey narrative.
+//
+// Consumed today by main.js (scene rendering) and route-rail.js (id/index/label only —
+// route-rail.js and nav.js are otherwise untouched by this schema).
+//
+// `businessPurpose` is planning/documentation metadata — intentionally NOT rendered in
+// the DOM. It keeps each scene's narrative intent attached to its content as copy
+// evolves, without leaking internal planning language into the page.
+//
+// `pacing` drives the sparse -> dense -> sparse rhythm (Alireza-inspired discipline).
+// main.js also reads it to decide how much decorative art a scene gets: sparse scenes
+// (the opening and closing beats) carry the animated route motif; denser scenes stay
+// calmer so heavier content reads cleanly. Values: 'sparse' | 'light' | 'medium' |
+// 'medium-dense' | 'dense'.
+//
+// `accent` is a brand-token hex reused to tint each scene's decorative glow, giving the
+// seven CSS-authored placeholder environments a subtly distinct identity ahead of real
+// generated art. Omitted on the hero scene, which uses its own fixed glow colors.
+//
+// `proofPoints` / `stats` / `cta` are optional. `stats` is currently unused by every
+// scene — no verified TransRoyal figures exist yet — but renderStats() and its CSS stay
+// wired up so adding a scene's stats later is a config-only change.
+//
+// `media` is reserved for the future cinematic layer: every value is `null` today
+// because no generated assets exist yet. Wiring a still/video for a scene should only
+// ever require filling in this field — not a rendering rewrite. See main.js's
+// renderSceneArt() for the CSS-authored fallback used while media is absent.
 export const SCENES = [
   {
     id: 'origin',
     index: 1,
     label: 'Origin',
+    pacing: 'sparse',
     eyebrow: 'TransRoyal Network',
-    title: 'Command Center / Network Origin',
-    body: 'Every shipment begins inside the network that watches over it.',
+    title: 'Enter the Network',
+    body: 'Every shipment begins inside the network built to move it — coordinated, monitored, and never out of sight.',
+    businessPurpose: [
+      'TransRoyal introduction',
+      'value proposition',
+      'journey introduction',
+      'persistent tracking access (via nav)',
+    ],
+    cta: { label: 'Continue the journey', href: '#scene-pickup' },
+    media: null,
   },
   {
     id: 'pickup',
     index: 2,
     label: 'Pickup',
+    pacing: 'light',
     eyebrow: 'Shipment Prepared',
-    title: 'Pickup & Intake',
-    body: 'A parcel is scanned, labeled, and handed into the network.',
+    title: 'Begin Your Journey',
+    body: 'One scan starts the chain of custody — labeled, logged, and handed into the network within minutes of pickup.',
+    businessPurpose: ['customer engagement', 'shipment creation', 'pickup process', 'customer experience'],
+    proofPoints: ['Scheduled & on-demand pickup', 'Real-time intake scanning'],
+    accent: '#4fa3ff',
+    cta: { label: 'Start a Shipment', href: '#contact' },
+    media: null,
   },
   {
     id: 'sorting',
     index: 3,
     label: 'Sorting',
+    pacing: 'medium',
     eyebrow: 'Processing Hub',
-    title: 'Sorting & Processing Hub',
-    body: 'Automated routing sends every shipment down the right path.',
+    title: 'Built for Precision',
+    body: 'Automated routing reads every label and sends each shipment down the fastest verified path — built to remove error, not just add speed.',
+    businessPurpose: [
+      'operational capability',
+      'logistics technology',
+      'reliability',
+      'service quality',
+      'processing expertise',
+    ],
+    proofPoints: ['Automated route verification', 'Continuous quality checks', 'Sub-hour hub processing'],
+    accent: '#3654d6',
+    media: null,
   },
   {
     id: 'ground',
     index: 4,
     label: 'Ground',
+    pacing: 'dense',
     eyebrow: 'Regional Network',
-    title: 'Regional Ground Transport',
-    body: 'A fleet in constant motion, covering the ground between hubs.',
+    title: 'Moving What Matters',
+    body: 'A fleet in constant motion covers the ground between hubs. Regional lanes run on fixed schedules with live coordination, keeping freight moving even when a single route is delayed.',
+    businessPurpose: ['core services', 'domestic transportation', 'freight capabilities', 'logistics movement'],
+    proofPoints: [
+      'Scheduled regional lanes',
+      'Dedicated & shared freight',
+      'Live fleet coordination',
+      'Cross-hub load balancing',
+    ],
+    // No verified figures yet — see the `stats` note at the top of this file.
+    accent: '#2f8bff',
+    media: null,
   },
   {
     id: 'air',
     index: 5,
     label: 'Global',
+    pacing: 'medium-dense',
     eyebrow: 'International Reach',
-    title: 'Air Cargo & Global Network',
-    body: 'Where the regional network becomes a global one.',
+    title: 'Connected Beyond Borders',
+    body: 'Where the regional network becomes a global one — air cargo links TransRoyal hubs to destinations far beyond the region.',
+    businessPurpose: ['international logistics', 'network reach', 'global capabilities', 'company statistics'],
+    // No verified figures yet — see the `stats` note at the top of this file.
+    accent: '#4fa3ff',
+    media: null,
   },
   {
     id: 'final-mile',
     index: 6,
     label: 'Final Mile',
+    pacing: 'medium',
     eyebrow: 'Almost There',
-    title: 'Destination City & Final-Mile',
-    body: 'Into the destination city, on the last leg of the journey.',
+    title: 'Visibility at Every Step',
+    body: 'Into the destination city, on the last leg of the journey — status follows every shipment the whole way, visible anytime through Track Shipment.',
+    businessPurpose: ['shipment visibility', 'tracking technology', 'customer communication', 'final-mile operations'],
+    // Deliberately no functional tracking form here — Track Shipment (nav) remains the
+    // single tracking interaction; this scene only demonstrates the capability.
+    proofPoints: ['Live status updates', 'Final-mile routing'],
+    accent: '#3654d6',
+    media: null,
   },
   {
     id: 'delivered',
     index: 7,
     label: 'Delivered',
+    pacing: 'sparse',
     eyebrow: 'Successful Delivery',
-    title: 'Successful Delivery & CTA',
-    body: 'Delivered — and ready to ship with TransRoyal yourself.',
+    title: 'Delivered with Confidence',
+    body: 'Delivered — and ready to ship with TransRoyal again. Every shipment on the network is backed by the same standard of care.',
+    businessPurpose: ['trust', 'reliability', 'proof points', 'customer confidence', 'final CTA'],
+    // No verified figures yet — see the `stats` note at the top of this file.
+    accent: '#2f8bff',
+    cta: { label: 'Get in Touch', href: '#contact' },
+    media: null,
   },
 ];

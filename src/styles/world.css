@@ -70,6 +70,15 @@
     animation-delay: -8s;
   }
 
+  /* Non-hero scenes reuse the same glow mechanic, tinted per scene via --scene-accent
+     (set inline from config.js's `accent` field) instead of the hero's fixed pair. */
+  .scene__art-glow--accent {
+    top: -8%;
+    right: -4%;
+    background: var(--scene-accent, var(--electric-500));
+    animation-delay: -5s;
+  }
+
   @keyframes scene-drift {
     0%,
     100% {
@@ -125,6 +134,11 @@
     margin-bottom: 14px;
   }
 
+  .scene__body {
+    margin-top: 16px;
+    max-width: 640px;
+  }
+
   .scene--hero .scene__body {
     font-size: 1.15rem;
     margin-top: 18px;
@@ -150,33 +164,55 @@
     }
   }
 
-  /* --- Scenes 2-7: semantic placeholders only, honestly marked as in-production --- */
-  .scene--pending {
-    justify-content: center;
-    background: var(--navy-950);
+  /* --- Scenes 2-7: real narrative content, CSS-authored environment pending real assets --- */
+  .scene--journey {
+    background:
+      radial-gradient(50% 45% at 78% 12%, rgb(255 255 255 / 4%), transparent 60%),
+      linear-gradient(180deg, var(--navy-950) 0%, var(--navy-900) 45%, var(--navy-950) 100%);
     border-top: 1px solid var(--border-subtle);
   }
 
-  .scene__copy--pending {
-    max-width: 560px;
-    text-align: center;
-    margin-inline: auto;
-
-    h2 {
-      margin-top: 10px;
-    }
-
-    .scene__body {
-      margin-top: 12px;
-    }
+  .scene__proof-points {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 22px;
   }
 
-  .scene__status {
-    margin-top: 20px;
-    font-size: 0.8rem;
+  .scene__proof-points li {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--surface-glass);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 8px 14px;
+  }
+
+  .scene__stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 24px;
+    margin-top: 28px;
+    max-width: 480px;
+  }
+
+  .scene__stat-value {
+    display: block;
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: clamp(1.5rem, 2vw + 1rem, 2.1rem);
+    color: var(--white);
+    letter-spacing: -0.01em;
+  }
+
+  .scene__stat-label {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.78rem;
     color: var(--text-dim);
-    letter-spacing: 0.03em;
     text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
   @media (prefers-reduced-motion: reduce) {

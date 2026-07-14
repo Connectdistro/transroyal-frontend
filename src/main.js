@@ -12,44 +12,107 @@ import { mountTrackingPanel } from './components/tracking-panel.js';
 import { mountRouteRail } from './components/route-rail.js';
 import { mountFooter } from './components/footer.js';
 
-function renderWorld() {
-  const [hero, ...rest] = SCENES;
+const HERO_ART = `
+  <div class="scene__art-grid"></div>
+  <div class="scene__art-glow scene__art-glow--a"></div>
+  <div class="scene__art-glow scene__art-glow--b"></div>
+  ${routeSVG()}
+`;
 
-  const heroMarkup = `
-    <section id="scene-${hero.id}" data-scene-id="${hero.id}" class="scene scene--hero" aria-labelledby="scene-${hero.id}-title">
+function routeSVG() {
+  return `
+    <svg class="scene__art-routes" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice">
+      <path d="M40 520 C 220 380, 260 200, 460 160 S 720 120, 760 40" />
+      <path d="M20 200 C 180 260, 320 320, 420 300 S 640 260, 780 340" />
+    </svg>`;
+}
+
+/**
+ * CSS/SVG-authored decorative environment layer, standing in for a real generated
+ * still/video until Milestone M1c wires `scene.media`. Sparse scenes (the journey's
+ * opening and closing beats) carry the fuller, animated treatment; denser scenes stay
+ * calmer so their heavier content reads cleanly — this is the visual half of the
+ * sparse -> dense -> sparse pacing driven by `scene.pacing` in config.js.
+ */
+function renderSceneArt(scene, isHero) {
+  if (isHero) {
+    return `<div class="scene__art" aria-hidden="true">${HERO_ART}</div>`;
+  }
+
+  if (scene.pacing === 'sparse') {
+    return `
       <div class="scene__art" aria-hidden="true">
         <div class="scene__art-grid"></div>
-        <div class="scene__art-glow scene__art-glow--a"></div>
-        <div class="scene__art-glow scene__art-glow--b"></div>
-        <svg class="scene__art-routes" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice">
-          <path d="M40 520 C 220 380, 260 200, 460 160 S 720 120, 760 40" />
-          <path d="M20 200 C 180 260, 320 320, 420 300 S 640 260, 780 340" />
-        </svg>
-      </div>
+        <div class="scene__art-glow scene__art-glow--accent"></div>
+        ${routeSVG()}
+      </div>`;
+  }
+
+  return `
+    <div class="scene__art" aria-hidden="true">
+      <div class="scene__art-grid"></div>
+      <div class="scene__art-glow scene__art-glow--accent"></div>
+    </div>`;
+}
+
+function renderProofPoints(points) {
+  if (!points?.length) return '';
+  return `
+    <ul class="scene__proof-points">
+      ${points.map((point) => `<li>${point}</li>`).join('')}
+    </ul>`;
+}
+
+function renderStats(stats) {
+  if (!stats?.length) return '';
+  return `
+    <div class="scene__stats">
+      ${stats
+        .map(
+          (stat) => `
+        <div class="scene__stat">
+          <span class="scene__stat-value">${stat.value}</span>
+          <span class="scene__stat-label">${stat.label}</span>
+        </div>`
+        )
+        .join('')}
+    </div>`;
+}
+
+function renderCta(cta) {
+  if (!cta) return '';
+  return `<a class="scene__cta" href="${cta.href}">${cta.label}</a>`;
+}
+
+/**
+ * One reusable scene template for all seven scenes — narrative-only, service/capability,
+ * stat-bearing, and CTA-bearing scenes are all the same markup shape, differing only in
+ * which optional config fields are present. Avoids seven hardcoded page sections; adding
+ * an eighth scene or a new optional field (e.g. a real `media` still) is a config change,
+ * not a template change.
+ */
+function renderScene(scene, isHero) {
+  const HeadingTag = isHero ? 'h1' : 'h2';
+  const sceneClass = isHero ? 'scene scene--hero' : 'scene scene--journey';
+  const accentStyle = scene.accent ? ` style="--scene-accent: ${scene.accent}"` : '';
+
+  return `
+    <section id="scene-${scene.id}" data-scene-id="${scene.id}" data-pacing="${scene.pacing}" class="${sceneClass}" aria-labelledby="scene-${scene.id}-title"${accentStyle}>
+      ${renderSceneArt(scene, isHero)}
       <div class="scene__copy">
-        <p class="scene__eyebrow">${hero.eyebrow}</p>
-        <h1 id="scene-${hero.id}-title">${hero.title}</h1>
-        <p class="scene__body">${hero.body}</p>
-        <a class="scene__cta" href="#scene-${rest[0].id}">Continue the journey &darr;</a>
+        <p class="scene__eyebrow">${scene.eyebrow}</p>
+        <${HeadingTag} id="scene-${scene.id}-title">${scene.title}</${HeadingTag}>
+        <p class="scene__body">${scene.body}</p>
+        ${renderProofPoints(scene.proofPoints)}
+        ${renderStats(scene.stats)}
+        ${renderCta(scene.cta)}
       </div>
-    </section>
-  `;
+    </section>`;
+}
 
-  const pendingMarkup = rest
-    .map(
-      (scene) => `
-      <section id="scene-${scene.id}" data-scene-id="${scene.id}" class="scene scene--pending" aria-labelledby="scene-${scene.id}-title">
-        <div class="scene__copy scene__copy--pending">
-          <p class="scene__eyebrow">${scene.eyebrow}</p>
-          <h2 id="scene-${scene.id}-title">${scene.title}</h2>
-          <p class="scene__body">${scene.body}</p>
-          <p class="scene__status">Cinematic scene in production</p>
-        </div>
-      </section>`
-    )
-    .join('');
-
-  return `<main id="world" class="world">${heroMarkup}${pendingMarkup}</main>`;
+function renderWorld() {
+  const markup = SCENES.map((scene, i) => renderScene(scene, i === 0)).join('');
+  return `<main id="world" class="world">${markup}</main>`;
 }
 
 document.querySelector('#app').innerHTML = `
