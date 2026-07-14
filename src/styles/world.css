@@ -29,15 +29,50 @@
       linear-gradient(180deg, var(--navy-950) 0%, var(--navy-900) 55%, var(--navy-950) 100%);
   }
 
+  /* ==========================================================================
+     Scene depth/media layer architecture (Milestone M1C.3)
+     --------------------------------------------------------------------------
+     Every scene's decorative + future-media stack lives inside one aria-hidden
+     .scene__art wrapper, painted bottom-to-top in this order:
+
+       0  .scene__media       future still/video (empty today — media is null
+                               on every scene; nothing renders here yet)
+       1  .scene__atmosphere  background texture (the dot/line grid)
+       2  .scene__lighting    glow accents (hero's fixed pair, or a scene's
+                               accent-tinted single glow)
+       3  .scene__depth       the route-line motif (hero + sparse scenes only)
+       4  .scene__scrim       legibility gradient, always present
+
+     .scene__art itself sits at z-index:0 against .scene__copy's z-index:1 (the
+     content layer, always on top) — unchanged since M1B. Because .scene__art is
+     `position:absolute` with a non-auto z-index, it establishes its own stacking
+     context, so the 0-4 scale above is fully contained inside it and can never
+     collide with the page-level chrome stack (route-rail 400, nav 500, tracking
+     overlay 900, skip-link 1000 — all defined in their own files, all untouched
+     by this milestone). `pointer-events: none` keeps the whole stack, including
+     any future video, from ever intercepting a click meant for page content.
+     ========================================================================== */
   .scene__art {
     position: absolute;
     inset: 0;
     z-index: 0;
+    pointer-events: none;
   }
 
-  .scene__art-grid {
+  .scene__media {
     position: absolute;
     inset: 0;
+    z-index: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+  }
+
+  .scene__atmosphere {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
     background-image:
       linear-gradient(rgb(255 255 255 / 4%) 1px, transparent 1px),
       linear-gradient(90deg, rgb(255 255 255 / 4%) 1px, transparent 1px);
@@ -45,8 +80,9 @@
     mask-image: radial-gradient(80% 70% at 60% 40%, black, transparent 90%);
   }
 
-  .scene__art-glow {
+  .scene__lighting {
     position: absolute;
+    z-index: 2;
     width: 46vw;
     height: 46vw;
     max-width: 560px;
@@ -57,13 +93,13 @@
     animation: scene-drift 16s ease-in-out infinite;
   }
 
-  .scene__art-glow--a {
+  .scene__lighting--a {
     top: -10%;
     right: -8%;
     background: var(--electric-500);
   }
 
-  .scene__art-glow--b {
+  .scene__lighting--b {
     bottom: -18%;
     left: -10%;
     background: var(--royal-600);
@@ -72,7 +108,7 @@
 
   /* Non-hero scenes reuse the same glow mechanic, tinted per scene via --scene-accent
      (set inline from config.js's `accent` field) instead of the hero's fixed pair. */
-  .scene__art-glow--accent {
+  .scene__lighting--accent {
     top: -8%;
     right: -4%;
     background: var(--scene-accent, var(--electric-500));
@@ -89,9 +125,10 @@
     }
   }
 
-  .scene__art-routes {
+  .scene__depth {
     position: absolute;
     inset: 0;
+    z-index: 3;
     width: 100%;
     height: 100%;
     opacity: 0.5;
@@ -117,6 +154,21 @@
     to {
       stroke-dashoffset: -160;
     }
+  }
+
+  /* Legibility scrim (Milestone M1C.3) — a soft navy-to-transparent gradient over
+     the left portion of the scene, where .scene__copy always sits (every
+     composition keeps copy left-anchored — see world.css's [data-composition]
+     rules). Protects text over whatever sits beneath it: today's CSS-authored
+     grid/glow/routes, and later, real photographic/video content of unpredictable
+     brightness. Deliberately not opaque — the environment underneath stays
+     clearly visible through it — and deliberately not a bounded "card" shape, no
+     blur, no backdrop-filter. */
+  .scene__scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    background: linear-gradient(90deg, rgb(5 8 31 / 55%) 0%, rgb(5 8 31 / 30%) 35%, transparent 65%);
   }
 
   .scene__copy {
@@ -323,8 +375,8 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .scene__art-glow,
-    .scene__art-routes path {
+    .scene__lighting,
+    .scene__depth path {
       animation: none;
     }
   }

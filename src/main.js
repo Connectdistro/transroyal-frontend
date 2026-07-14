@@ -12,46 +12,73 @@ import { mountTrackingPanel } from './components/tracking-panel.js';
 import { mountRouteRail } from './components/route-rail.js';
 import { mountFooter } from './components/footer.js';
 
-const HERO_ART = `
-  <div class="scene__art-grid"></div>
-  <div class="scene__art-glow scene__art-glow--a"></div>
-  <div class="scene__art-glow scene__art-glow--b"></div>
-  ${routeSVG()}
-`;
+/**
+ * Future still/video slot (Milestone M1C.3 scaffold). `scene.media` is
+ * `{ still, video, mobileStill, mobileVideo }`, every field `null` today — no
+ * generated assets exist yet, so this always returns '' in practice. Nothing here
+ * ever emits a broken/empty <img> or <video>; the populated branches only run once
+ * config.js actually carries a real asset path.
+ */
+function renderSceneMedia(scene) {
+  const { still, mobileStill, video } = scene.media ?? {};
+  if (!still && !video) return '';
 
-function routeSVG() {
+  if (video) {
+    // `still` doubles as the poster (pre-decode fallback + lazy-load frame).
+    // Mobile source-swapping for video is deliberately left to the future
+    // scroll-engine milestone — see config.js's `media` doc comment.
+    return `<video class="scene__media" muted loop playsinline preload="none"${
+      still ? ` poster="${still}"` : ''
+    }><source src="${video}" type="video/mp4" /></video>`;
+  }
+
+  // <picture> gives still images native, JS-free mobile substitution.
+  return `<picture>${
+    mobileStill ? `<source media="(max-width: 639px)" srcset="${mobileStill}" />` : ''
+  }<img class="scene__media" src="${still}" alt="" /></picture>`;
+}
+
+function renderSceneAtmosphere() {
+  return `<div class="scene__atmosphere"></div>`;
+}
+
+function renderSceneLighting(isHero) {
+  return isHero
+    ? `<div class="scene__lighting scene__lighting--a"></div><div class="scene__lighting scene__lighting--b"></div>`
+    : `<div class="scene__lighting scene__lighting--accent"></div>`;
+}
+
+function renderSceneDepth(scene, isHero) {
+  if (!isHero && scene.pacing !== 'sparse') return '';
   return `
-    <svg class="scene__art-routes" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice">
+    <svg class="scene__depth" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice">
       <path d="M40 520 C 220 380, 260 200, 460 160 S 720 120, 760 40" />
       <path d="M20 200 C 180 260, 320 320, 420 300 S 640 260, 780 340" />
     </svg>`;
 }
 
+function renderSceneScrim() {
+  return `<div class="scene__scrim"></div>`;
+}
+
 /**
- * CSS/SVG-authored decorative environment layer, standing in for a real generated
- * still/video until Milestone M1c wires `scene.media`. Sparse scenes (the journey's
- * opening and closing beats) carry the fuller, animated treatment; denser scenes stay
- * calmer so their heavier content reads cleanly — this is the visual half of the
- * sparse -> dense -> sparse pacing driven by `scene.pacing` in config.js.
+ * The scene's decorative + media stack, in bottom-to-top paint order (documented
+ * alongside the matching z-index scale in world.css): media -> atmosphere ->
+ * lighting -> depth -> scrim. All five layers live inside one aria-hidden wrapper;
+ * `.scene__copy` (rendered by the caller) is the only sibling outside it, always on
+ * top. Sparse scenes (the journey's opening and closing beats) carry the depth
+ * layer's animated route motif; denser scenes stay calmer so their heavier content
+ * reads cleanly — the visual half of the sparse -> dense -> sparse pacing driven by
+ * `scene.pacing` in config.js.
  */
 function renderSceneArt(scene, isHero) {
-  if (isHero) {
-    return `<div class="scene__art" aria-hidden="true">${HERO_ART}</div>`;
-  }
-
-  if (scene.pacing === 'sparse') {
-    return `
-      <div class="scene__art" aria-hidden="true">
-        <div class="scene__art-grid"></div>
-        <div class="scene__art-glow scene__art-glow--accent"></div>
-        ${routeSVG()}
-      </div>`;
-  }
-
   return `
     <div class="scene__art" aria-hidden="true">
-      <div class="scene__art-grid"></div>
-      <div class="scene__art-glow scene__art-glow--accent"></div>
+      ${renderSceneMedia(scene)}
+      ${renderSceneAtmosphere()}
+      ${renderSceneLighting(isHero)}
+      ${renderSceneDepth(scene, isHero)}
+      ${renderSceneScrim()}
     </div>`;
 }
 

@@ -27,10 +27,22 @@
 // scene — no verified TransRoyal figures exist yet — but renderStats() and its CSS stay
 // wired up so adding a scene's stats later is a config-only change.
 //
-// `media` is reserved for the future cinematic layer: every value is `null` today
-// because no generated assets exist yet. Wiring a still/video for a scene should only
-// ever require filling in this field — not a rendering rewrite. See main.js's
-// renderSceneArt() for the CSS-authored fallback used while media is absent.
+// `media` is reserved for the future cinematic layer. Every scene ships the same
+// shape today — { still: null, video: null, mobileStill: null, mobileVideo: null }
+// — with every value null because no generated assets exist yet.
+//   - `still` doubles as the future <video>'s poster and lazy-load fallback once a
+//     video exists (see main.js's renderSceneMedia()) — there is no separate
+//     `poster` field, since that would just duplicate `still`.
+//   - `mobileStill` is optional: only needed for a scene whose focal subject can't
+//     survive object-fit: cover's center-weighted crop on a portrait viewport.
+//   - `mobileVideo` is optional: a lighter mobile encode of `video`, reserved for a
+//     future scroll-engine to source-swap via JS. It is not consumed by today's
+//     static render — swapping video sources by breakpoint needs JS to avoid
+//     downloading both encodes, which is out of scope for this architecture
+//     scaffold (Milestone M1C.3).
+// Wiring a still/video for a scene is a config-only change — main.js's
+// renderSceneMedia()/renderSceneArt() already handle both the populated and null
+// cases without a rendering rewrite.
 export const SCENES = [
   {
     id: 'origin',
@@ -48,7 +60,7 @@ export const SCENES = [
       'persistent tracking access (via nav)',
     ],
     cta: { label: 'Continue the journey', href: '#scene-pickup' },
-    media: null,
+    media: { still: null, video: null, mobileStill: null, mobileVideo: null },
   },
   {
     id: 'pickup',
@@ -63,7 +75,7 @@ export const SCENES = [
     proofPoints: ['Scheduled & on-demand pickup', 'Real-time intake scanning'],
     accent: '#4fa3ff',
     cta: { label: 'Start a Shipment', href: '#contact' },
-    media: null,
+    media: { still: null, video: null, mobileStill: null, mobileVideo: null },
   },
   {
     id: 'sorting',
@@ -83,7 +95,7 @@ export const SCENES = [
     ],
     proofPoints: ['Automated route verification', 'Continuous quality checks', 'Sub-hour hub processing'],
     accent: '#3654d6',
-    media: null,
+    media: { still: null, video: null, mobileStill: null, mobileVideo: null },
   },
   {
     id: 'ground',
@@ -103,7 +115,7 @@ export const SCENES = [
     ],
     // No verified figures yet — see the `stats` note at the top of this file.
     accent: '#2f8bff',
-    media: null,
+    media: { still: null, video: null, mobileStill: null, mobileVideo: null },
   },
   {
     id: 'air',
@@ -117,7 +129,7 @@ export const SCENES = [
     businessPurpose: ['international logistics', 'network reach', 'global capabilities', 'company statistics'],
     // No verified figures yet — see the `stats` note at the top of this file.
     accent: '#4fa3ff',
-    media: null,
+    media: { still: null, video: null, mobileStill: null, mobileVideo: null },
   },
   {
     id: 'final-mile',
@@ -133,7 +145,7 @@ export const SCENES = [
     // single tracking interaction; this scene only demonstrates the capability.
     proofPoints: ['Live status updates', 'Final-mile routing'],
     accent: '#3654d6',
-    media: null,
+    media: { still: null, video: null, mobileStill: null, mobileVideo: null },
   },
   {
     id: 'delivered',
@@ -148,6 +160,6 @@ export const SCENES = [
     // No verified figures yet — see the `stats` note at the top of this file.
     accent: '#2f8bff',
     cta: { label: 'Get in Touch', href: '#contact' },
-    media: null,
+    media: { still: null, video: null, mobileStill: null, mobileVideo: null },
   },
 ];
