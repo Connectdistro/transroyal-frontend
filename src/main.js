@@ -1,60 +1,70 @@
-import './style.css'
-import javascriptLogo from './assets/javascript.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import { setupCounter } from './counter.js'
+import './styles/tokens.css';
+import './styles/base.css';
+import './styles/nav.css';
+import './styles/tracking.css';
+import './styles/route-rail.css';
+import './styles/world.css';
+import './styles/footer.css';
+
+import { SCENES } from './scroll-world/config.js';
+import { mountNav } from './components/nav.js';
+import { mountTrackingPanel } from './components/tracking-panel.js';
+import { mountRouteRail } from './components/route-rail.js';
+import { mountFooter } from './components/footer.js';
+
+function renderWorld() {
+  const [hero, ...rest] = SCENES;
+
+  const heroMarkup = `
+    <section id="scene-${hero.id}" data-scene-id="${hero.id}" class="scene scene--hero" aria-labelledby="scene-${hero.id}-title">
+      <div class="scene__art" aria-hidden="true">
+        <div class="scene__art-grid"></div>
+        <div class="scene__art-glow scene__art-glow--a"></div>
+        <div class="scene__art-glow scene__art-glow--b"></div>
+        <svg class="scene__art-routes" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice">
+          <path d="M40 520 C 220 380, 260 200, 460 160 S 720 120, 760 40" />
+          <path d="M20 200 C 180 260, 320 320, 420 300 S 640 260, 780 340" />
+        </svg>
+      </div>
+      <div class="scene__copy">
+        <p class="scene__eyebrow">${hero.eyebrow}</p>
+        <h1 id="scene-${hero.id}-title">${hero.title}</h1>
+        <p class="scene__body">${hero.body}</p>
+        <a class="scene__cta" href="#scene-${rest[0].id}">Continue the journey &darr;</a>
+      </div>
+    </section>
+  `;
+
+  const pendingMarkup = rest
+    .map(
+      (scene) => `
+      <section id="scene-${scene.id}" data-scene-id="${scene.id}" class="scene scene--pending" aria-labelledby="scene-${scene.id}-title">
+        <div class="scene__copy scene__copy--pending">
+          <p class="scene__eyebrow">${scene.eyebrow}</p>
+          <h2 id="scene-${scene.id}-title">${scene.title}</h2>
+          <p class="scene__body">${scene.body}</p>
+          <p class="scene__status">Cinematic scene in production</p>
+        </div>
+      </section>`
+    )
+    .join('');
+
+  return `<main id="world" class="world">${heroMarkup}${pendingMarkup}</main>`;
+}
 
 document.querySelector('#app').innerHTML = `
-<section id="center">
-  <div class="hero">
-    <img src="${heroImg}" class="base" width="170" height="179">
-    <img src="${javascriptLogo}" class="framework" alt="JavaScript logo"/>
-    <img src="${viteLogo}" class="vite" alt="Vite logo" />
-  </div>
-  <div>
-    <h1>Get started</h1>
-    <p>Edit <code>src/main.js</code> and save to test <code>HMR</code></p>
-  </div>
-  <button id="counter" type="button" class="counter"></button>
-</section>
+  <a class="skip-link" href="#world">Skip to journey</a>
+  <a class="skip-link" href="#contact">Skip to footer</a>
+  <div id="nav-root"></div>
+  <div id="tracking-root"></div>
+  ${renderWorld()}
+  <div id="route-rail-root"></div>
+  <div id="footer-root"></div>
+`;
 
-<div class="ticks"></div>
-
-<section id="next-steps">
-  <div id="docs">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#documentation-icon"></use></svg>
-    <h2>Documentation</h2>
-    <p>Your questions, answered</p>
-    <ul>
-      <li>
-        <a href="https://vite.dev/" target="_blank">
-          <img class="logo" src="${viteLogo}" alt="" />
-          Explore Vite
-        </a>
-      </li>
-      <li>
-        <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript" target="_blank">
-          <img class="button-icon" src="${javascriptLogo}" alt="">
-          Learn more
-        </a>
-      </li>
-    </ul>
-  </div>
-  <div id="social">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#social-icon"></use></svg>
-    <h2>Connect with us</h2>
-    <p>Join the Vite community</p>
-    <ul>
-      <li><a href="https://github.com/vitejs/vite" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#github-icon"></use></svg>GitHub</a></li>
-      <li><a href="https://chat.vite.dev/" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#discord-icon"></use></svg>Discord</a></li>
-      <li><a href="https://x.com/vite_js" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#x-icon"></use></svg>X.com</a></li>
-      <li><a href="https://bsky.app/profile/vite.dev" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#bluesky-icon"></use></svg>Bluesky</a></li>
-    </ul>
-  </div>
-</section>
-
-<div class="ticks"></div>
-<section id="spacer"></section>
-`
-
-setupCounter(document.querySelector('#counter'))
+mountNav(document.querySelector('#nav-root'));
+mountTrackingPanel(document.querySelector('#tracking-root'));
+mountRouteRail(document.querySelector('#route-rail-root'), {
+  worldRoot: document.querySelector('#world'),
+});
+mountFooter(document.querySelector('#footer-root'));

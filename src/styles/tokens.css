@@ -1,0 +1,68 @@
+/* TransRoyal brand design tokens.
+   #080F50 is the fixed primary anchor per brand direction; every other value is
+   derived to sit alongside it. The site commits to a single premium dark cinematic
+   theme rather than following OS light/dark preference. */
+:root {
+  color-scheme: dark;
+
+  /* --- core palette --- */
+  --navy-950: #05081f; /* deepest background */
+  --navy-900: #080f50; /* primary brand anchor */
+  --navy-800: #101a6e;
+  --navy-700: #182590;
+  --royal-600: #2540b0; /* royal blue, derived from the navy anchor */
+  --royal-500: #3654d6;
+  --electric-500: #2f8bff; /* electric blue - motion, routes, tracking states */
+  --electric-400: #4fa3ff;
+  --white: #ffffff;
+  --offwhite-100: #eef2ff; /* light-blue tinted off-white */
+  --offwhite-200: #d7deff;
+
+  /* --- surfaces --- */
+  --bg: var(--navy-950);
+  --surface: var(--navy-900);
+  --surface-raised: var(--navy-800);
+  --surface-glass: rgb(255 255 255 / 6%);
+  --border-subtle: rgb(255 255 255 / 12%);
+  --border-strong: rgb(255 255 255 / 24%);
+
+  /* --- content --- */
+  --text: var(--white);
+  --text-muted: var(--offwhite-200);
+  --text-dim: rgb(238 242 255 / 62%);
+  --accent: var(--electric-500);
+  --accent-strong: var(--electric-400);
+
+  /* --- effects --- */
+  --focus-ring: 0 0 0 3px rgb(47 139 255 / 55%);
+  --shadow-elevated: 0 20px 60px -20px rgb(0 0 10 / 65%);
+  --shadow-soft: 0 8px 24px -12px rgb(0 0 10 / 55%);
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+
+  /* --- typography --- */
+  --font-sans:
+    'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-heading: var(--font-sans);
+
+  /* --- layout --- */
+  --nav-height: 72px;
+  --nav-height-mobile: 60px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+
+  /* --- motion --- */
+  --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 160ms;
+  --duration-base: 260ms;
+  --duration-slow: 420ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+  }
+}

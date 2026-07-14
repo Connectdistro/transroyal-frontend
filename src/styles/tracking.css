@@ -1,0 +1,153 @@
+@layer layout {
+  .tracking-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: max(24px, var(--safe-top)) 20px max(24px, var(--safe-bottom));
+    background: rgb(5 8 31 / 0%);
+    backdrop-filter: blur(0);
+    transition:
+      background var(--duration-base) var(--ease-standard),
+      backdrop-filter var(--duration-base) var(--ease-standard);
+    overflow-y: auto;
+
+    &[hidden] {
+      display: none;
+    }
+
+    &.is-open {
+      background: rgb(5 8 31 / 62%);
+      backdrop-filter: blur(6px);
+    }
+  }
+
+  .tracking-panel {
+    width: 100%;
+    max-width: 440px;
+    margin-top: calc(var(--nav-height) + 24px);
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-elevated);
+    padding: 32px;
+    position: relative;
+    opacity: 0;
+    transform: translateY(-12px) scale(0.98);
+    transition:
+      opacity var(--duration-base) var(--ease-standard),
+      transform var(--duration-base) var(--ease-standard);
+
+    @media (max-width: 480px) {
+      padding: 24px 20px;
+      margin-top: calc(var(--nav-height-mobile) + 16px);
+    }
+  }
+
+  .tracking-overlay.is-open .tracking-panel {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  .tracking-panel h2 {
+    font-size: 1.4rem;
+    margin-bottom: 8px;
+    padding-right: 32px;
+  }
+
+  .tracking-panel__lede {
+    margin-bottom: 20px;
+    font-size: 0.95rem;
+  }
+
+  .tracking-panel__close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-glass);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    color: var(--white);
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--surface-raised);
+    }
+  }
+
+  .tracking-panel form label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  .tracking-panel__field {
+    display: flex;
+    gap: 8px;
+
+    input {
+      flex: 1;
+      min-width: 0;
+      background: var(--navy-950);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      color: var(--white);
+      font-size: 0.95rem;
+      min-height: 44px;
+
+      &::placeholder {
+        color: var(--text-dim);
+      }
+    }
+
+    button {
+      background: var(--electric-500);
+      color: var(--white);
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 0 20px;
+      font-weight: 600;
+      min-height: 44px;
+      cursor: pointer;
+      transition: background var(--duration-fast) var(--ease-standard);
+
+      &:hover {
+        background: var(--electric-400);
+      }
+    }
+
+    @media (max-width: 380px) {
+      flex-direction: column;
+
+      button {
+        min-height: 44px;
+      }
+    }
+  }
+
+  .tracking-panel__status {
+    margin-top: 14px;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    min-height: 1.2em;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tracking-panel,
+    .tracking-overlay {
+      transition: none;
+    }
+  }
+}

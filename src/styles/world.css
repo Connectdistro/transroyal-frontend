@@ -1,0 +1,188 @@
+@layer layout {
+  /* Semantic container the future scroll-scrub engine (Milestone 3) will mount video
+     legs into. In Milestone 0 it's plain document flow — each scene is a normal
+     scrollable section, no pinning, no video. */
+  .world {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .scene {
+    position: relative;
+    min-height: 100svh;
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    padding-inline: 24px;
+    overflow: hidden;
+
+    @media (min-width: 640px) {
+      padding-inline: 64px;
+    }
+  }
+
+  /* --- Scene 1: Command Center / Network Origin (real placeholder, CSS/SVG only) --- */
+  .scene--hero {
+    background:
+      radial-gradient(60% 50% at 80% 15%, rgb(47 139 255 / 22%), transparent 60%),
+      radial-gradient(70% 60% at 10% 90%, rgb(37 64 176 / 35%), transparent 65%),
+      linear-gradient(180deg, var(--navy-950) 0%, var(--navy-900) 55%, var(--navy-950) 100%);
+  }
+
+  .scene__art {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
+
+  .scene__art-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgb(255 255 255 / 4%) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(255 255 255 / 4%) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: radial-gradient(80% 70% at 60% 40%, black, transparent 90%);
+  }
+
+  .scene__art-glow {
+    position: absolute;
+    width: 46vw;
+    height: 46vw;
+    max-width: 560px;
+    max-height: 560px;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.55;
+    animation: scene-drift 16s ease-in-out infinite;
+  }
+
+  .scene__art-glow--a {
+    top: -10%;
+    right: -8%;
+    background: var(--electric-500);
+  }
+
+  .scene__art-glow--b {
+    bottom: -18%;
+    left: -10%;
+    background: var(--royal-600);
+    animation-delay: -8s;
+  }
+
+  @keyframes scene-drift {
+    0%,
+    100% {
+      transform: translate(0, 0) scale(1);
+    }
+    50% {
+      transform: translate(3%, -4%) scale(1.08);
+    }
+  }
+
+  .scene__art-routes {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.5;
+
+    path {
+      fill: none;
+      stroke: var(--electric-400);
+      stroke-width: 1.5;
+      stroke-linecap: round;
+      stroke-dasharray: 6 10;
+      animation: scene-route-flow 6s linear infinite;
+    }
+
+    path:nth-child(2) {
+      stroke: var(--offwhite-200);
+      opacity: 0.4;
+      animation-duration: 9s;
+      animation-direction: reverse;
+    }
+  }
+
+  @keyframes scene-route-flow {
+    to {
+      stroke-dashoffset: -160;
+    }
+  }
+
+  .scene__copy {
+    position: relative;
+    z-index: 1;
+    max-width: 620px;
+  }
+
+  .scene__eyebrow {
+    color: var(--accent-strong);
+    font-weight: 600;
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+
+  .scene--hero .scene__body {
+    font-size: 1.15rem;
+    margin-top: 18px;
+    max-width: 480px;
+  }
+
+  .scene__cta {
+    display: inline-flex;
+    margin-top: 32px;
+    color: var(--white);
+    text-decoration: none;
+    font-weight: 600;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    padding: 12px 20px;
+    transition:
+      border-color var(--duration-fast) var(--ease-standard),
+      background var(--duration-fast) var(--ease-standard);
+
+    &:hover {
+      background: var(--surface-glass);
+      border-color: var(--accent-strong);
+    }
+  }
+
+  /* --- Scenes 2-7: semantic placeholders only, honestly marked as in-production --- */
+  .scene--pending {
+    justify-content: center;
+    background: var(--navy-950);
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .scene__copy--pending {
+    max-width: 560px;
+    text-align: center;
+    margin-inline: auto;
+
+    h2 {
+      margin-top: 10px;
+    }
+
+    .scene__body {
+      margin-top: 12px;
+    }
+  }
+
+  .scene__status {
+    margin-top: 20px;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .scene__art-glow,
+    .scene__art-routes path {
+      animation: none;
+    }
+  }
+}

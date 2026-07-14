@@ -1,0 +1,115 @@
+@layer layout {
+  .site-footer {
+    background: var(--navy-950);
+    border-top: 1px solid var(--border-subtle);
+    padding: 56px 24px 32px;
+    margin-top: auto;
+
+    @media (min-width: 640px) {
+      padding: 72px 40px 40px;
+    }
+  }
+
+  .site-footer__top {
+    max-width: 1200px;
+    margin-inline: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+    padding-bottom: 40px;
+    border-bottom: 1px solid var(--border-subtle);
+
+    @media (min-width: 900px) {
+      flex-direction: row;
+      justify-content: space-between;
+      gap: 60px;
+    }
+  }
+
+  .site-footer__brand {
+    max-width: 320px;
+
+    .site-footer__brand-name {
+      display: block;
+      font-weight: 600;
+      font-size: 1.25rem;
+      color: var(--white);
+      margin-bottom: 12px;
+    }
+
+    p {
+      font-size: 0.9rem;
+    }
+  }
+
+  .site-footer__columns {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 32px;
+
+    @media (min-width: 560px) {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 48px;
+    }
+  }
+
+  .site-footer__column {
+    h3 {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      margin-bottom: 16px;
+    }
+
+    ul {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    a {
+      text-decoration: none;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+
+      &:hover {
+        color: var(--white);
+      }
+    }
+  }
+
+  .site-footer__bottom {
+    max-width: 1200px;
+    margin-inline: auto;
+    padding-top: 24px;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 16px;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+
+    @media (min-width: 640px) {
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+    }
+  }
+
+  .site-footer__legal {
+    display: flex;
+    gap: 20px;
+
+    a {
+      text-decoration: none;
+      color: var(--text-dim);
+
+      &:hover {
+        color: var(--text-muted);
+      }
+    }
+  }
+}
