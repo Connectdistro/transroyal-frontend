@@ -22,11 +22,25 @@
   }
 
   /* --- Scene 1: Command Center / Network Origin (real placeholder, CSS/SVG only) --- */
+  /* Phase 3: layered for richer atmospheric depth (front to back) -- a subtle
+     film-grain texture, a vignette that darkens the frame edges to focus the
+     eye on the copy, the two glow gradients refined with a mid-stop for
+     smoother falloff instead of a single hard edge, then the original base
+     gradient underneath, unchanged. */
   .scene--hero {
     background:
-      radial-gradient(60% 50% at 80% 15%, rgb(47 139 255 / 22%), transparent 60%),
-      radial-gradient(70% 60% at 10% 90%, rgb(37 64 176 / 35%), transparent 65%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E"),
+      radial-gradient(115% 85% at 50% 45%, transparent 55%, rgb(2 4 15 / 58%) 100%),
+      radial-gradient(60% 50% at 80% 15%, rgb(47 139 255 / 26%) 0%, rgb(47 139 255 / 8%) 40%, transparent 68%),
+      radial-gradient(70% 60% at 10% 90%, rgb(37 64 176 / 40%) 0%, rgb(37 64 176 / 12%) 42%, transparent 72%),
       linear-gradient(180deg, var(--navy-950) 0%, var(--navy-900) 55%, var(--navy-950) 100%);
+    background-size:
+      160px 160px,
+      auto,
+      auto,
+      auto,
+      auto;
+    background-blend-mode: overlay, normal, normal, normal, normal;
   }
 
   /* ==========================================================================
@@ -152,16 +166,19 @@
       scene-lighting-pulse 6s ease-in-out infinite;
   }
 
+  /* Phase 3: a radial "hot core" falloff reads richer than a flat color blurred
+     uniformly -- the blur softens the edges, but a real gradient underneath
+     gives the glow a genuine bright center rather than an even wash. */
   .scene__lighting--a {
     top: -10%;
     right: -8%;
-    background: var(--electric-500);
+    background: radial-gradient(circle at 50% 50%, var(--electric-400) 0%, var(--electric-500) 45%, transparent 75%);
   }
 
   .scene__lighting--b {
     bottom: -18%;
     left: -10%;
-    background: var(--royal-600);
+    background: radial-gradient(circle at 50% 50%, var(--royal-500) 0%, var(--royal-600) 45%, transparent 75%);
     animation-delay: -8s;
   }
 
@@ -355,6 +372,12 @@
        6.5rem at desktop (Phase 1: Alireza-inspired hero rebuild), and large
        display type reads more premium with less line-height slack. */
     line-height: 0.98;
+    /* Phase 3: tighter tracking at this scale (base.css's global -0.02em is
+       tuned for the smaller h2/h3 sizes) plus a soft dark shadow for depth and
+       legibility over whatever sits behind it -- CSS gradients today, real
+       photographic/video content later. */
+    letter-spacing: -0.03em;
+    text-shadow: 0 4px 32px rgb(0 0 10 / 45%);
   }
 
   .scene__title-word {
@@ -465,11 +488,27 @@
     background: var(--electric-500);
     border-color: var(--electric-500);
     color: var(--navy-950);
-    box-shadow: var(--shadow-elevated);
+    padding: 14px 24px;
+    box-shadow:
+      var(--shadow-elevated),
+      0 0 32px -8px rgb(47 139 255 / 55%);
+    transition:
+      background var(--duration-fast) var(--ease-standard),
+      border-color var(--duration-fast) var(--ease-standard),
+      box-shadow var(--duration-base) var(--ease-standard),
+      transform var(--duration-fast) var(--ease-standard);
 
     &:hover {
       background: var(--electric-400);
       border-color: var(--electric-400);
+      box-shadow:
+        var(--shadow-elevated),
+        0 0 44px -6px rgb(79 163 255 / 70%);
+      transform: translateY(-2px);
+    }
+
+    &:active {
+      transform: translateY(0);
     }
   }
 
