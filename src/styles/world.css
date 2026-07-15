@@ -67,6 +67,28 @@
     height: 100%;
     object-fit: cover;
     object-position: center;
+    opacity: 1;
+    animation: scene-media-reveal 900ms var(--ease-standard) both;
+    transition:
+      opacity 700ms var(--ease-standard),
+      transform 700ms var(--ease-standard);
+  }
+
+  /* One-shot entrance only — not a loop. `both` + a base `opacity: 1` above means
+     disabling this under reduced-motion (see the media query at the end of this
+     file) simply leaves the media at its resting, fully-visible state instead of
+     stuck invisible. Plays identically whether `.scene__media` is an <img> or a
+     <video>; works unchanged with a CSS placeholder background or a real
+     production still, since it targets the element, not its content. */
+  @keyframes scene-media-reveal {
+    from {
+      opacity: 0;
+      transform: scale(1.015);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
   }
 
   .scene__atmosphere {
@@ -78,6 +100,37 @@
       linear-gradient(90deg, rgb(255 255 255 / 4%) 1px, transparent 1px);
     background-size: 64px 64px;
     mask-image: radial-gradient(80% 70% at 60% 40%, black, transparent 90%);
+    animation:
+      scene-atmosphere-drift 48s linear infinite,
+      scene-atmosphere-shimmer 9s ease-in-out infinite;
+    /* State-driven intensity uses the `filter: opacity()` function, not the
+       `opacity` property — that property is already owned by the shimmer
+       keyframe above, and an animation always wins over a transition on the
+       same property, which would make a transition on `opacity` silently
+       no-op. `filter` is otherwise untouched here, so it's free to transition. */
+    filter: opacity(100%);
+    transition: filter 700ms var(--ease-standard);
+  }
+
+  /* Drifts a full grid tile (64px) so the loop is seamless — no visible jump at
+     the restart. Deliberately slow and linear; this should read as ambient, not
+     as a noticeable moving pattern. */
+  @keyframes scene-atmosphere-drift {
+    to {
+      background-position:
+        64px 64px,
+        64px 64px;
+    }
+  }
+
+  @keyframes scene-atmosphere-shimmer {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
   }
 
   .scene__lighting {
@@ -88,9 +141,15 @@
     max-width: 560px;
     max-height: 560px;
     border-radius: 50%;
-    filter: blur(80px);
+    /* brightness() is the state-driven "intensity" term — opacity is already
+       owned by the scene-lighting-pulse keyframe below (same reasoning as
+       .scene__atmosphere's filter above), so intensity rides on filter instead. */
+    filter: blur(80px) brightness(1);
     opacity: 0.55;
-    animation: scene-drift 16s ease-in-out infinite;
+    transition: filter 700ms var(--ease-standard);
+    animation:
+      scene-drift 16s ease-in-out infinite,
+      scene-lighting-pulse 6s ease-in-out infinite;
   }
 
   .scene__lighting--a {
@@ -125,6 +184,18 @@
     }
   }
 
+  /* Layered onto scene-drift's transform via the comma-separated `animation` list
+     above — opacity and transform don't collide, so both play independently. */
+  @keyframes scene-lighting-pulse {
+    0%,
+    100% {
+      opacity: 0.45;
+    }
+    50% {
+      opacity: 0.65;
+    }
+  }
+
   .scene__depth {
     position: absolute;
     inset: 0;
@@ -132,6 +203,7 @@
     width: 100%;
     height: 100%;
     opacity: 0.5;
+    animation: scene-depth-breathe 10s ease-in-out infinite;
 
     path {
       fill: none;
@@ -156,6 +228,21 @@
     }
   }
 
+  /* Applied to the .scene__depth wrapper itself (opacity + transform), entirely
+     independent of the child paths' own stroke-dashoffset flow above — different
+     properties, different elements, no interaction between the two. */
+  @keyframes scene-depth-breathe {
+    0%,
+    100% {
+      opacity: 0.4;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.6;
+      transform: scale(1.015);
+    }
+  }
+
   /* Legibility scrim (Milestone M1C.3) — a soft navy-to-transparent gradient over
      the left portion of the scene, where .scene__copy always sits (every
      composition keeps copy left-anchored — see world.css's [data-composition]
@@ -169,6 +256,78 @@
     inset: 0;
     z-index: 4;
     background: linear-gradient(90deg, rgb(5 8 31 / 55%) 0%, rgb(5 8 31 / 30%) 35%, transparent 65%);
+    /* No existing animation on this element, so a direct `opacity` transition
+       is safe — unlike lighting/atmosphere above, nothing else claims it. */
+    opacity: 1;
+    transition: opacity 700ms var(--ease-standard);
+  }
+
+  /* ==========================================================================
+     Scene transition system (M2A) — generic, state-driven, no scene-id
+     selectors. `data-state` is written by scroll-world/scene-state.js onto the
+     same .scene element that already carries data-pacing/data-composition;
+     these rules key off it the same way those two already do. Every value
+     below is intentionally subtle ("calm and premium," not dramatic): media
+     scale never moves more than 1%, and nothing drops low enough to threaten
+     legibility or hide content at any state. `active` is always the fullest,
+     most present value; `inactive` is the most receded but never hidden.
+     ========================================================================== */
+  .scene[data-state='inactive'] .scene__media {
+    opacity: 0.85;
+  }
+
+  .scene[data-state='entering'] .scene__media {
+    opacity: 0.94;
+    transform: scale(1.01);
+  }
+
+  .scene[data-state='active'] .scene__media {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .scene[data-state='leaving'] .scene__media {
+    opacity: 0.94;
+    transform: scale(0.99);
+  }
+
+  .scene[data-state='inactive'] .scene__lighting {
+    filter: blur(80px) brightness(0.85);
+  }
+
+  .scene[data-state='entering'] .scene__lighting,
+  .scene[data-state='leaving'] .scene__lighting {
+    filter: blur(80px) brightness(0.95);
+  }
+
+  .scene[data-state='active'] .scene__lighting {
+    filter: blur(80px) brightness(1.05);
+  }
+
+  .scene[data-state='inactive'] .scene__atmosphere {
+    filter: opacity(70%);
+  }
+
+  .scene[data-state='entering'] .scene__atmosphere,
+  .scene[data-state='leaving'] .scene__atmosphere {
+    filter: opacity(85%);
+  }
+
+  .scene[data-state='active'] .scene__atmosphere {
+    filter: opacity(100%);
+  }
+
+  .scene[data-state='inactive'] .scene__scrim {
+    opacity: 0.9;
+  }
+
+  .scene[data-state='entering'] .scene__scrim,
+  .scene[data-state='leaving'] .scene__scrim {
+    opacity: 0.95;
+  }
+
+  .scene[data-state='active'] .scene__scrim {
+    opacity: 1;
   }
 
   .scene__copy {
@@ -375,9 +534,40 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .scene__media,
+    .scene__atmosphere,
     .scene__lighting,
+    .scene__depth,
     .scene__depth path {
       animation: none;
+    }
+
+    /* M2A state-transition system: remove the transition and the scaling, but
+       preserve visibility — every scene reads as fully present (opacity 1,
+       full filter strength, no scale) regardless of data-state, rather than
+       snapping instantly to a dimmer value with the animation merely removed. */
+    .scene__media,
+    .scene__lighting,
+    .scene__atmosphere,
+    .scene__scrim {
+      transition: none;
+    }
+
+    .scene[data-state] .scene__media {
+      opacity: 1;
+      transform: none;
+    }
+
+    .scene[data-state] .scene__lighting {
+      filter: blur(80px) brightness(1);
+    }
+
+    .scene[data-state] .scene__atmosphere {
+      filter: opacity(100%);
+    }
+
+    .scene[data-state] .scene__scrim {
+      opacity: 1;
     }
   }
 }

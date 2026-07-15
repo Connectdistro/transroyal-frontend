@@ -35,11 +35,12 @@
 //     `poster` field, since that would just duplicate `still`.
 //   - `mobileStill` is optional: only needed for a scene whose focal subject can't
 //     survive object-fit: cover's center-weighted crop on a portrait viewport.
-//   - `mobileVideo` is optional: a lighter mobile encode of `video`, reserved for a
-//     future scroll-engine to source-swap via JS. It is not consumed by today's
-//     static render — swapping video sources by breakpoint needs JS to avoid
-//     downloading both encodes, which is out of scope for this architecture
-//     scaffold (Milestone M1C.3).
+//   - `mobileVideo` is optional: a lighter mobile encode of `video`, selected via a
+//     declarative <source media> query on initial load (main.js's
+//     renderSceneMedia()) — the same JS-free mechanism `mobileStill` uses. It does
+//     not re-select on a later resize/orientation change (video doesn't re-run
+//     source selection reactively the way picture/img do); reactive breakpoint
+//     swapping remains the future scroll-engine milestone's job.
 // Wiring a still/video for a scene is a config-only change — main.js's
 // renderSceneMedia()/renderSceneArt() already handle both the populated and null
 // cases without a rendering rewrite.
@@ -60,6 +61,9 @@ export const SCENES = [
       'persistent tracking access (via nav)',
     ],
     cta: { label: 'Continue the journey', href: '#scene-pickup' },
+    // Production still lands at /media/scenes/Scene_01_Production_Master.png —
+    // see public/media/scenes/README.md. Once it exists, set `still` below to
+    // that path; no other change is needed.
     media: { still: null, video: null, mobileStill: null, mobileVideo: null },
   },
   {
