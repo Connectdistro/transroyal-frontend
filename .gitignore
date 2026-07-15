@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Third-party reference material (design/competitor research) -- never ship this
+reference/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

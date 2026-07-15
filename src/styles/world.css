@@ -350,10 +350,71 @@
     max-width: 640px;
   }
 
+  .scene--hero h1 {
+    /* Tighter leading as the display size grows -- --text-2xl now scales up to
+       6.5rem at desktop (Phase 1: Alireza-inspired hero rebuild), and large
+       display type reads more premium with less line-height slack. */
+    line-height: 0.98;
+  }
+
+  .scene__title-word {
+    display: inline-block;
+    opacity: 0;
+    transform: translateY(0.35em);
+    animation: scene-title-word-in 900ms var(--ease-standard) both;
+    animation-delay: calc(var(--word-index, 0) * 90ms + 150ms);
+  }
+
+  @keyframes scene-title-word-in {
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   .scene--hero .scene__body {
     font-size: var(--text-md);
-    margin-top: 18px;
+    margin-top: 28px;
     max-width: 480px;
+  }
+
+  .scene--hero .scene__cta {
+    margin-top: 40px;
+  }
+
+  .scene__scroll-cue {
+    position: absolute;
+    right: 24px;
+    bottom: max(24px, var(--safe-bottom));
+    z-index: 1;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-dim);
+    font-size: var(--text-xs);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    animation: scene-scroll-cue-bounce 2.4s ease-in-out infinite;
+
+    @media (min-width: 640px) {
+      display: inline-flex;
+    }
+
+    svg {
+      flex-shrink: 0;
+    }
+  }
+
+  @keyframes scene-scroll-cue-bounce {
+    0%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.6;
+    }
+    50% {
+      transform: translateY(6px);
+      opacity: 1;
+    }
   }
 
   .scene__cta {
@@ -538,8 +599,15 @@
     .scene__atmosphere,
     .scene__lighting,
     .scene__depth,
-    .scene__depth path {
+    .scene__depth path,
+    .scene__title-word,
+    .scene__scroll-cue {
       animation: none;
+    }
+
+    .scene__title-word {
+      opacity: 1;
+      transform: none;
     }
 
     /* M2A state-transition system: remove the transition and the scaling, but

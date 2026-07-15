@@ -140,22 +140,49 @@ function renderCta(cta) {
  * an eighth scene or a new optional field (e.g. a real `media` still) is a config change,
  * not a template change.
  */
+/**
+ * Splits a heading's words into individually-animatable spans, hidden from
+ * assistive tech (`aria-hidden`) with the real accessible name carried by
+ * `aria-label` on the heading itself instead — the same technique real
+ * cinematic sites use for staggered title reveals without sacrificing a
+ * screen reader's ability to read the whole title as one string.
+ */
+function renderTitleWords(title) {
+  return title
+    .split(' ')
+    .map((word, i) => `<span class="scene__title-word" style="--word-index:${i}" aria-hidden="true">${word}</span>`)
+    .join(' ');
+}
+
+function renderScrollCue() {
+  return `
+    <div class="scene__scroll-cue" aria-hidden="true">
+      <span>Scroll to discover</span>
+      <svg viewBox="0 0 24 24" width="16" height="16"><path d="M12 4v14m0 0l-6-6m6 6l6-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+    </div>`;
+}
+
 function renderScene(scene, isHero) {
   const HeadingTag = isHero ? 'h1' : 'h2';
   const sceneClass = isHero ? 'scene scene--hero' : 'scene scene--journey';
   const accentStyle = scene.accent ? ` style="--scene-accent: ${scene.accent}"` : '';
+  // Word-split staggered reveal is a hero-only touch for now (Phase 1) -- non-hero
+  // headings render their title plainly, unchanged from before.
+  const headingContent = isHero ? renderTitleWords(scene.title) : scene.title;
+  const headingAriaLabel = isHero ? ` aria-label="${scene.title}"` : '';
 
   return `
     <section id="scene-${scene.id}" data-scene-id="${scene.id}" data-pacing="${scene.pacing}" data-composition="${scene.composition}" class="${sceneClass}" aria-labelledby="scene-${scene.id}-title"${accentStyle}>
       ${renderSceneArt(scene, isHero)}
       <div class="scene__copy">
         <p class="scene__eyebrow">${scene.eyebrow}</p>
-        <${HeadingTag} id="scene-${scene.id}-title">${scene.title}</${HeadingTag}>
+        <${HeadingTag} id="scene-${scene.id}-title"${headingAriaLabel}>${headingContent}</${HeadingTag}>
         <p class="scene__body">${scene.body}</p>
         ${renderProofPoints(scene.proofPoints)}
         ${renderStats(scene.stats)}
         ${renderCta(scene.cta)}
       </div>
+      ${isHero ? renderScrollCue() : ''}
     </section>`;
 }
 
