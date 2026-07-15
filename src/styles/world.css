@@ -382,6 +382,26 @@
     margin-top: 40px;
   }
 
+  /* Phase 2, desktop only: more generous side margin and a clearer two-group
+     rhythm (identity: eyebrow+title close together / action: body+CTA set
+     further apart) at real desktop widths -- matches the reference's
+     deliberate breathing room without touching tablet/mobile. */
+  @media (min-width: 1024px) {
+    .scene--hero {
+      padding-inline: 96px;
+    }
+
+    .scene--hero .scene__body {
+      margin-top: 36px;
+      max-width: 520px;
+    }
+
+    .scene--hero .scene__lighting {
+      max-width: 680px;
+      max-height: 680px;
+    }
+  }
+
   .scene__scroll-cue {
     position: absolute;
     right: 24px;
@@ -434,6 +454,22 @@
     &:hover {
       background: var(--surface-glass);
       border-color: var(--accent-strong);
+    }
+  }
+
+  /* Phase 2: the hero's CTA carries more visual weight than the outlined style
+     other scenes use -- a filled pill, matching the reference's high-contrast
+     prominence -- using only existing brand tokens (electric-500/navy), no new
+     color. */
+  .scene--hero .scene__cta {
+    background: var(--electric-500);
+    border-color: var(--electric-500);
+    color: var(--navy-950);
+    box-shadow: var(--shadow-elevated);
+
+    &:hover {
+      background: var(--electric-400);
+      border-color: var(--electric-400);
     }
   }
 
@@ -493,6 +529,17 @@
      explicit rather than an incidental hero carve-out. */
   .scene[data-composition='focus'] .scene__copy {
     max-width: 620px;
+  }
+
+  /* Phase 2 (hero composition rebuild, desktop only): a wider, more confident
+     column at real desktop widths so the Phase 1 display-scale increase has
+     room to breathe -- still well left of the frame, still the same
+     left-anchored, never-centered rule above; just less cramped. Tablet/mobile
+     untouched. */
+  @media (min-width: 1024px) {
+    .scene[data-composition='focus'] .scene__copy {
+      max-width: 720px;
+    }
   }
 
   /* OPERATIONAL (Pickup, Final Mile) — moderately contained and scannable. Caps
