@@ -7,35 +7,55 @@ import './styles/world.css';
 import './styles/footer.css';
 
 import { SCENES } from './scroll-world/config.js';
+import { mountSceneState } from './scroll-world/scene-state.js';
 import { mountNav } from './components/nav.js';
 import { mountTrackingPanel } from './components/tracking-panel.js';
 import { mountRouteRail } from './components/route-rail.js';
 import { mountFooter } from './components/footer.js';
 
 /**
- * Future still/video slot (Milestone M1C.3 scaffold). `scene.media` is
- * `{ still, video, mobileStill, mobileVideo }`, every field `null` today — no
- * generated assets exist yet, so this always returns '' in practice. Nothing here
- * ever emits a broken/empty <img> or <video>; the populated branches only run once
- * config.js actually carries a real asset path.
+ * Production still/video slot (Milestone M1C.3 scaffold, extended for Phase 4.1).
+ * `scene.media` is `{ still, video, mobileStill, mobileVideo }`, every field `null`
+ * today — no generated assets exist yet, so this always returns '' in practice.
+ * Nothing here ever emits a broken/empty <img> or <video>; the populated branches
+ * only run once config.js actually carries a real asset path — wiring a scene's
+ * media is a config-only change, never a rendering rewrite.
+ *
+ * `isHero` (the opening scene, by position — never a scene-id check) gets eager,
+ * high-priority image loading since it's the first thing painted; every other
+ * scene lazy-loads since it's below the fold at initial paint.
+ *
+ * `mobileVideo`, once populated, is now picked via a <source media> query on the
+ * <video> itself — the same declarative, JS-free mechanism <picture> already uses
+ * for `mobileStill`. This selects the right encode on initial load; re-selecting
+ * on a later resize/orientation change is still out of scope here (video, unlike
+ * picture/img, doesn't re-run source selection reactively) — that remains the
+ * future scroll-engine milestone's job, per this file's original scaffolding note.
  */
-function renderSceneMedia(scene) {
-  const { still, mobileStill, video } = scene.media ?? {};
-  if (!still && !video) return '';
+function renderSceneMedia(scene, isHero) {
+  const { still, mobileStill, video, mobileVideo } = scene.media ?? {};
+  const baseStill = still ?? mobileStill;
+  if (!baseStill && !video) return '';
 
   if (video) {
-    // `still` doubles as the poster (pre-decode fallback + lazy-load frame).
-    // Mobile source-swapping for video is deliberately left to the future
-    // scroll-engine milestone — see config.js's `media` doc comment.
+    // `baseStill` doubles as the poster (pre-decode fallback + lazy-load frame).
+    const mobileSource = mobileVideo
+      ? `<source media="(max-width: 639px)" src="${mobileVideo}" type="video/mp4" />`
+      : '';
     return `<video class="scene__media" muted loop playsinline preload="none"${
-      still ? ` poster="${still}"` : ''
-    }><source src="${video}" type="video/mp4" /></video>`;
+      baseStill ? ` poster="${baseStill}"` : ''
+    }>${mobileSource}<source src="${video}" type="video/mp4" /></video>`;
   }
 
-  // <picture> gives still images native, JS-free mobile substitution.
-  return `<picture>${
-    mobileStill ? `<source media="(max-width: 639px)" srcset="${mobileStill}" />` : ''
-  }<img class="scene__media" src="${still}" alt="" /></picture>`;
+  // <picture> gives still images native, JS-free mobile substitution. Falls back to
+  // mobileStill as the base image if a scene only ever ships that field.
+  const mobileSource =
+    mobileStill && mobileStill !== baseStill
+      ? `<source media="(max-width: 639px)" srcset="${mobileStill}" />`
+      : '';
+  const loading = isHero ? 'eager' : 'lazy';
+  const fetchPriority = isHero ? 'high' : 'low';
+  return `<picture>${mobileSource}<img class="scene__media" src="${baseStill}" alt="" loading="${loading}" fetchpriority="${fetchPriority}" decoding="async" /></picture>`;
 }
 
 function renderSceneAtmosphere() {
@@ -74,7 +94,7 @@ function renderSceneScrim() {
 function renderSceneArt(scene, isHero) {
   return `
     <div class="scene__art" aria-hidden="true">
-      ${renderSceneMedia(scene)}
+      ${renderSceneMedia(scene, isHero)}
       ${renderSceneAtmosphere()}
       ${renderSceneLighting(isHero)}
       ${renderSceneDepth(scene, isHero)}
@@ -157,4 +177,5 @@ mountTrackingPanel(document.querySelector('#tracking-root'));
 mountRouteRail(document.querySelector('#route-rail-root'), {
   worldRoot: document.querySelector('#world'),
 });
+mountSceneState(document.querySelector('#world'));
 mountFooter(document.querySelector('#footer-root'));
