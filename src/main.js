@@ -8,6 +8,7 @@ import './styles/footer.css';
 
 import { SCENES } from './scroll-world/config.js';
 import { mountSceneState } from './scroll-world/scene-state.js';
+import { mountScenePreload } from './scroll-world/scene-preload.js';
 import { mountNav } from './components/nav.js';
 import { mountTrackingPanel } from './components/tracking-panel.js';
 import { mountRouteRail } from './components/route-rail.js';
@@ -178,4 +179,5 @@ mountRouteRail(document.querySelector('#route-rail-root'), {
   worldRoot: document.querySelector('#world'),
 });
 mountSceneState(document.querySelector('#world'));
+mountScenePreload(document.querySelector('#world'));
 mountFooter(document.querySelector('#footer-root'));
