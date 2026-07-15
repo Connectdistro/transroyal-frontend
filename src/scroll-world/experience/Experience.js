@@ -46,6 +46,7 @@ export class Experience {
   }
 
   update() {
+    this.world.update();
     this.renderer.update();
   }
 

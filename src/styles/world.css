@@ -21,26 +21,26 @@
     }
   }
 
-  /* --- Scene 1: Command Center / Network Origin (real placeholder, CSS/SVG only) --- */
-  /* Phase 3: layered for richer atmospheric depth (front to back) -- a subtle
-     film-grain texture, a vignette that darkens the frame edges to focus the
-     eye on the copy, the two glow gradients refined with a mid-stop for
-     smoother falloff instead of a single hard edge, then the original base
-     gradient underneath, unchanged. */
+  /* --- Scene 1: Command Center / Network Origin --- */
+  /* The Three.js world (Production Handbook Section 23, Scene 01) now renders
+     the environment on the persistent WebGL canvas behind the whole page
+     (#world-canvas-root, world-canvas.css, z-index -1). The hero section
+     itself must stay transparent so that canvas shows through -- an opaque
+     CSS background here would paint over it regardless of DOM order, since
+     z-index -1 always sits below a z-index:auto element. Its own CSS
+     decorative layers (atmosphere grid, glow blobs, SVG route lines) are
+     retired for this reason too, scoped to .scene--hero only -- Scenes 2-7
+     keep theirs unchanged until their own Three.js environment lands. The
+     scrim stays: it protects copy legibility against whatever the 3D scene's
+     brightness happens to be at this point in frame, not decorative art. */
   .scene--hero {
-    background:
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E"),
-      radial-gradient(115% 85% at 50% 45%, transparent 55%, rgb(2 4 15 / 58%) 100%),
-      radial-gradient(60% 50% at 80% 15%, rgb(47 139 255 / 26%) 0%, rgb(47 139 255 / 8%) 40%, transparent 68%),
-      radial-gradient(70% 60% at 10% 90%, rgb(37 64 176 / 40%) 0%, rgb(37 64 176 / 12%) 42%, transparent 72%),
-      linear-gradient(180deg, var(--navy-950) 0%, var(--navy-900) 55%, var(--navy-950) 100%);
-    background-size:
-      160px 160px,
-      auto,
-      auto,
-      auto,
-      auto;
-    background-blend-mode: overlay, normal, normal, normal, normal;
+    background: transparent;
+  }
+
+  .scene--hero .scene__atmosphere,
+  .scene--hero .scene__lighting,
+  .scene--hero .scene__depth {
+    display: none;
   }
 
   /* ==========================================================================

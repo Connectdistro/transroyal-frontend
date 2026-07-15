@@ -2,7 +2,10 @@ import { EquirectangularReflectionMapping, FogExp2, SRGBColorSpace } from 'three
 import { createBackgroundGradient } from './environment/background.js';
 
 const ROYAL_600 = '#2540b0';
-const DEFAULT_FOG_DENSITY = 0.035;
+// Tuned to Origin's own spec (Section 23: "the lightest haze in the entire
+// journey... maximum clarity") -- the shared default, adjustable at runtime
+// via setFogDensity() once later chapters need a heavier reading.
+const DEFAULT_FOG_DENSITY = 0.012;
 
 /** Manifest id for the world's single shared HDR (Production Handbook
  *  Section 8: every location shares one material/lighting language). Not a
