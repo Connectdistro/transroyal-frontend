@@ -1,6 +1,6 @@
-import { Scene } from 'three';
 import { Sizes } from './Sizes.js';
 import { Time } from './Time.js';
+import { Scene } from './Scene.js';
 import { Camera } from './Camera.js';
 import { Renderer } from './Renderer.js';
 import { World } from './World.js';
@@ -9,13 +9,6 @@ import { Resources } from './Resources.js';
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 
-/**
- * Root of the persistent Three.js world (Production Handbook Section 9).
- * Owns the renderer, scene, camera, sizes, time, world, environment, and
- * resource manager, and drives the single render loop for the life of the
- * session. A visitor with reduced motion enabled gets one static frame,
- * re-rendered only on resize, instead of a continuous loop.
- */
 export class Experience {
   static instance;
 
@@ -29,7 +22,7 @@ export class Experience {
     this.sizes = new Sizes(this.container);
     this.time = new Time();
     this.scene = new Scene();
-    this.resources = new Resources();
+    this.resources = new Resources(this);
     this.camera = new Camera(this);
     this.renderer = new Renderer(this);
     this.world = new World(this);
@@ -38,8 +31,8 @@ export class Experience {
     this.reducedMotion = window.matchMedia(REDUCED_MOTION_QUERY);
     this.frameId = null;
 
-    this.sizes.addEventListener('resize', () => this.resize());
-    this.time.addEventListener('tick', () => this.update());
+    this.sizes.on('resize', () => this.resize());
+    this.time.on('tick', () => this.update());
     this.reducedMotion.addEventListener('change', () => {
       this.stopLoop();
       this.startLoop();
@@ -55,8 +48,6 @@ export class Experience {
   }
 
   update() {
-    this.camera.update();
-    this.world.update();
     this.renderer.update();
   }
 
@@ -78,5 +69,10 @@ export class Experience {
     if (this.frameId === null) return;
     cancelAnimationFrame(this.frameId);
     this.frameId = null;
+  }
+
+  destroy() {
+    this.stopLoop();
+    this.renderer.instance.dispose();
   }
 }

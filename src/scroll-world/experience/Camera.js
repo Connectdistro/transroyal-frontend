@@ -1,10 +1,5 @@
 import { PerspectiveCamera } from 'three';
 
-/**
- * Production Handbook Section 11 (Camera Bible). Only the camera instance and
- * resize handling exist today — the scroll-driven master path is a later
- * production task, so `update()` is intentionally a no-op for now.
- */
 export class Camera {
   constructor(experience) {
     this.experience = experience;
@@ -17,9 +12,5 @@ export class Camera {
   resize() {
     this.instance.aspect = this.sizes.width / this.sizes.height || 1;
     this.instance.updateProjectionMatrix();
-  }
-
-  update() {
-    // Reserved for the Camera Bible's scroll-driven motion (Section 11) — no motion yet.
   }
 }

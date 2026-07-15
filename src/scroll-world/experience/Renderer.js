@@ -2,12 +2,6 @@ import { ACESFilmicToneMapping, Color, SRGBColorSpace, WebGLRenderer } from 'thr
 
 const NAVY_950 = 0x05081f;
 
-/**
- * Production Handbook Section 10 (Rendering Pipeline). Filmic tone mapping
- * and the brand's navy clear color are the only pipeline decisions that
- * apply before any scene content exists — bloom, depth of field, and the
- * rest of the post-processing stack are later production tasks.
- */
 export class Renderer {
   constructor(experience) {
     this.experience = experience;
@@ -30,6 +24,6 @@ export class Renderer {
   }
 
   update() {
-    this.instance.render(this.scene, this.camera.instance);
+    this.instance.render(this.scene.instance, this.camera.instance);
   }
 }

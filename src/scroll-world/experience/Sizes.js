@@ -1,19 +1,16 @@
-/**
- * Owns viewport measurement for the Three.js world (Production Handbook
- * Section 9). Reads its dimensions from the world canvas's fixed-position
- * container rather than the window directly, and re-measures on every
- * window resize, dispatching `resize` for the Camera and Renderer to react to.
- */
-export class Sizes extends EventTarget {
+import { EventEmitter } from './utils/EventEmitter.js';
+
+export class Sizes extends EventEmitter {
   constructor(container) {
     super();
     this.container = container;
     this.resize();
 
-    window.addEventListener('resize', () => {
+    this.observer = new ResizeObserver(() => {
       this.resize();
-      this.dispatchEvent(new Event('resize'));
+      this.emit('resize');
     });
+    this.observer.observe(this.container);
   }
 
   resize() {
