@@ -9,6 +9,16 @@
     backdrop-filter: blur(14px) saturate(140%);
     -webkit-backdrop-filter: blur(14px) saturate(140%);
     border-bottom: 1px solid var(--border-subtle);
+
+    /* Phase 4 (desktop only): lighter, closer to the reference's near-invisible
+       floating chrome -- less tint, more blur to compensate, the hard seam
+       softened to almost nothing. Tablet/mobile untouched. */
+    @media (min-width: 1024px) {
+      background: rgb(5 8 31 / 42%);
+      backdrop-filter: blur(20px) saturate(150%);
+      -webkit-backdrop-filter: blur(20px) saturate(150%);
+      border-bottom-color: rgb(255 255 255 / 6%);
+    }
   }
 
   .nav__inner {
@@ -24,6 +34,10 @@
       height: var(--nav-height);
       padding-inline: 32px;
     }
+
+    @media (min-width: 1024px) {
+      padding-inline: 56px;
+    }
   }
 
   .nav__brand {
@@ -36,6 +50,12 @@
     letter-spacing: -0.01em;
     font-size: 1.05rem;
     margin-right: auto;
+
+    @media (min-width: 1024px) {
+      gap: 14px;
+      letter-spacing: 0.01em;
+      font-size: 1.15rem;
+    }
   }
 
   .nav__brand-mark {
@@ -52,15 +72,42 @@
       display: flex;
     }
 
+    @media (min-width: 1024px) {
+      gap: 40px;
+    }
+
     a {
+      position: relative;
       text-decoration: none;
       color: var(--text-muted);
       font-size: var(--text-sm);
       font-weight: 500;
+      padding-bottom: 4px;
       transition: color var(--duration-fast) var(--ease-standard);
+
+      @media (min-width: 1024px) {
+        letter-spacing: 0.01em;
+      }
+
+      /* Phase 4: an underline that sweeps in on hover, rather than a flat
+         color swap -- reads as an intentional micro-interaction. */
+      &::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 100%;
+        bottom: 0;
+        height: 1px;
+        background: var(--accent-strong);
+        transition: right var(--duration-base) var(--ease-standard);
+      }
 
       &:hover {
         color: var(--white);
+
+        &::after {
+          right: 0;
+        }
       }
     }
   }
@@ -85,6 +132,7 @@
     cursor: pointer;
     transition:
       background var(--duration-fast) var(--ease-standard),
+      box-shadow var(--duration-base) var(--ease-standard),
       transform var(--duration-fast) var(--ease-standard);
 
     span {
@@ -95,6 +143,10 @@
 
     &:hover {
       background: var(--electric-400);
+      /* Phase 4: same glow-on-hover language as the hero CTA (Phase 3), so the
+         two premium actions on the page feel like one consistent system. */
+      box-shadow: 0 0 24px -6px rgb(79 163 255 / 65%);
+      transform: translateY(-1px);
     }
 
     &:active {
