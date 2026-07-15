@@ -9,9 +9,11 @@
     padding: max(24px, var(--safe-top)) 20px max(24px, var(--safe-bottom));
     background: rgb(5 8 31 / 0%);
     backdrop-filter: blur(0);
+    -webkit-backdrop-filter: blur(0);
     transition:
       background var(--duration-base) var(--ease-standard),
-      backdrop-filter var(--duration-base) var(--ease-standard);
+      backdrop-filter var(--duration-base) var(--ease-standard),
+      -webkit-backdrop-filter var(--duration-base) var(--ease-standard);
     overflow-y: auto;
 
     &[hidden] {
@@ -21,6 +23,7 @@
     &.is-open {
       background: rgb(5 8 31 / 62%);
       backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
     }
   }
 
