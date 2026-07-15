@@ -1,5 +1,6 @@
 import './styles/tokens.css';
 import './styles/base.css';
+import './styles/world-canvas.css';
 import './styles/nav.css';
 import './styles/tracking.css';
 import './styles/route-rail.css';
@@ -8,6 +9,7 @@ import './styles/footer.css';
 
 import { SCENES } from './scroll-world/config.js';
 import { MOBILE_MEDIA_QUERY } from './scroll-world/breakpoints.js';
+import { mountWorldCanvas } from './scroll-world/world-canvas.js';
 import { mountSceneState } from './scroll-world/scene-state.js';
 import { mountScenePreload } from './scroll-world/scene-preload.js';
 import { mountNav } from './components/nav.js';
@@ -192,6 +194,7 @@ function renderWorld() {
 }
 
 document.querySelector('#app').innerHTML = `
+  <div id="world-canvas-root" aria-hidden="true"></div>
   <a class="skip-link" href="#world">Skip to journey</a>
   <a class="skip-link" href="#contact">Skip to footer</a>
   <div id="nav-root"></div>
@@ -201,6 +204,7 @@ document.querySelector('#app').innerHTML = `
   <div id="footer-root"></div>
 `;
 
+mountWorldCanvas(document.querySelector('#world-canvas-root'));
 mountNav(document.querySelector('#nav-root'));
 mountTrackingPanel(document.querySelector('#tracking-root'));
 mountRouteRail(document.querySelector('#route-rail-root'), {

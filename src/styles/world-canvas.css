@@ -1,0 +1,19 @@
+/* Production Handbook Section 9 (Layer One — the World): a persistent WebGL
+   canvas mounted once behind the entire HTML interface layer. Fixed to the
+   viewport so it never scrolls with page content; z-index -1 keeps it behind
+   every page-level chrome layer (route-rail 400, nav 500, tracking overlay
+   900, skip-link 1000) without needing to coordinate with that scale. */
+@layer layout {
+  #world-canvas-root {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  .world-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+}
