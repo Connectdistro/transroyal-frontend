@@ -1,6 +1,5 @@
 import { SCENES } from './config.js';
-
-const MOBILE_QUERY = '(max-width: 639px)';
+import { MOBILE_MEDIA_QUERY } from './breakpoints.js';
 
 /**
  * Progressive, one-scene-ahead media preloading. Listens for the
@@ -22,7 +21,7 @@ export function mountScenePreload(worldRoot) {
   if (!sections.length) return;
 
   const preloaded = new Set();
-  const isMobile = () => window.matchMedia(MOBILE_QUERY).matches;
+  const isMobile = () => window.matchMedia(MOBILE_MEDIA_QUERY).matches;
 
   // Mirrors renderSceneMedia's own still/mobileStill fallback in main.js (not
   // imported from there, since that file's render pipeline isn't touched by

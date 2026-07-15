@@ -7,6 +7,7 @@ import './styles/world.css';
 import './styles/footer.css';
 
 import { SCENES } from './scroll-world/config.js';
+import { MOBILE_MEDIA_QUERY } from './scroll-world/breakpoints.js';
 import { mountSceneState } from './scroll-world/scene-state.js';
 import { mountScenePreload } from './scroll-world/scene-preload.js';
 import { mountNav } from './components/nav.js';
@@ -41,7 +42,7 @@ function renderSceneMedia(scene, isHero) {
   if (video) {
     // `baseStill` doubles as the poster (pre-decode fallback + lazy-load frame).
     const mobileSource = mobileVideo
-      ? `<source media="(max-width: 639px)" src="${mobileVideo}" type="video/mp4" />`
+      ? `<source media="${MOBILE_MEDIA_QUERY}" src="${mobileVideo}" type="video/mp4" />`
       : '';
     return `<video class="scene__media" muted loop playsinline preload="none"${
       baseStill ? ` poster="${baseStill}"` : ''
@@ -52,7 +53,7 @@ function renderSceneMedia(scene, isHero) {
   // mobileStill as the base image if a scene only ever ships that field.
   const mobileSource =
     mobileStill && mobileStill !== baseStill
-      ? `<source media="(max-width: 639px)" srcset="${mobileStill}" />`
+      ? `<source media="${MOBILE_MEDIA_QUERY}" srcset="${mobileStill}" />`
       : '';
   const loading = isHero ? 'eager' : 'lazy';
   const fetchPriority = isHero ? 'high' : 'low';
