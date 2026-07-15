@@ -1,4 +1,4 @@
-import { ACESFilmicToneMapping, Color, SRGBColorSpace, WebGLRenderer } from 'three';
+import { ACESFilmicToneMapping, Color, PCFSoftShadowMap, SRGBColorSpace, WebGLRenderer } from 'three';
 
 const NAVY_950 = 0x05081f;
 
@@ -15,6 +15,8 @@ export class Renderer {
     this.instance.outputColorSpace = SRGBColorSpace;
     this.instance.toneMapping = ACESFilmicToneMapping;
     this.instance.toneMappingExposure = 1;
+    this.instance.shadowMap.enabled = true;
+    this.instance.shadowMap.type = PCFSoftShadowMap;
     this.resize();
   }
 

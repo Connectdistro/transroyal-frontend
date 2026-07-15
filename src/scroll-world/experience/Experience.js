@@ -4,7 +4,6 @@ import { Scene } from './Scene.js';
 import { Camera } from './Camera.js';
 import { Renderer } from './Renderer.js';
 import { World } from './World.js';
-import { Environment } from './Environment.js';
 import { Resources } from './Resources.js';
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
@@ -26,7 +25,6 @@ export class Experience {
     this.camera = new Camera(this);
     this.renderer = new Renderer(this);
     this.world = new World(this);
-    this.environment = new Environment(this);
 
     this.reducedMotion = window.matchMedia(REDUCED_MOTION_QUERY);
     this.frameId = null;
