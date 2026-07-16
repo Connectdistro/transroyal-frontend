@@ -39,7 +39,8 @@
   #scene-pickup,
   #scene-sorting,
   #scene-ground,
-  #scene-air {
+  #scene-air,
+  #scene-final-mile {
     background: transparent;
   }
 
@@ -57,7 +58,10 @@
   #scene-ground .scene__depth,
   #scene-air .scene__atmosphere,
   #scene-air .scene__lighting,
-  #scene-air .scene__depth {
+  #scene-air .scene__depth,
+  #scene-final-mile .scene__atmosphere,
+  #scene-final-mile .scene__lighting,
+  #scene-final-mile .scene__depth {
     display: none;
   }
 

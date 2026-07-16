@@ -74,6 +74,17 @@ export const SHOTS = {
     // wash -- restored to the shared default by camera-sync.js on leaving.
     fog: { color: 0x4a63a8, density: 0.006 },
   },
+  'final-mile': {
+    // Section 23, Scene 06: "Elevated operational vantage, roughly 2.5-3
+    // meters -- the same height and lens family as Pickup, closing the
+    // journey's human-scale bracket." Same relative offsets as Pickup's own
+    // shot, applied to this chapter's REGION_Z.
+    fov: 35,
+    near: 0.1,
+    far: 1000,
+    position: { x: -14, y: 3.2, z: -673 },
+    target: { x: 7, y: 1.3, z: -705 },
+  },
 };
 
 export const DEFAULT_SHOT_ID = 'origin';
