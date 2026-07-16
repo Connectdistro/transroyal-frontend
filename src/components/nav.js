@@ -12,11 +12,22 @@ const SCROLL_ELEVATE_THRESHOLD = 40;
 
 /**
  * Mounts the persistent primary navigation. A floating, near-transparent bar
- * at rest -- it only gains a subtle backdrop once the visitor scrolls past
- * the opening frame, never a heavy fixed header -- with a full-screen
- * overlay menu below 900px instead of a dropdown. Dispatches
+ * at rest -- it only gains a whisper of a backdrop once the visitor scrolls
+ * past the opening frame, never a heavy fixed header. Dispatches
  * `transroyal:track-open` on document when Track Shipment is used;
  * tracking-panel.js listens for it.
+ *
+ * Desktop's inline link row (`.nav__links`) and the sub-900px full-screen
+ * overlay (`.nav__menu`) are deliberately two separate elements, each
+ * rendered from the same NAV_LINKS data, rather than one element that
+ * changes role across the breakpoint. A single dual-role element previously
+ * caused a real bug: crossing the 900px breakpoint while the page was open
+ * made the browser animate the overlay's opacity/transform transition (only
+ * ever meant to run on an explicit open/close) as a side effect of the
+ * media query itself flipping -- a flash of full-screen menu text over the
+ * hero. Two independent elements can't have that cross-breakpoint transition
+ * at all: `.nav__menu` is `display: none` above 900px, and below it, its own
+ * closed state never changes value as a result of viewport width.
  */
 export function mountNav(container) {
   container.innerHTML = `
@@ -29,10 +40,8 @@ export function mountNav(container) {
           <span class="nav__brand-name">TransRoyal</span>
         </a>
 
-        <ul class="nav__links" id="nav-links">
-          ${NAV_LINKS.map(
-            (link, i) => `<li style="--link-index:${i}"><a href="${link.href}">${link.label}</a></li>`
-          ).join('')}
+        <ul class="nav__links">
+          ${NAV_LINKS.map((link) => `<li><a href="${link.href}">${link.label}</a></li>`).join('')}
         </ul>
 
         <div class="nav__actions">
@@ -46,7 +55,7 @@ export function mountNav(container) {
             class="nav__toggle"
             data-nav-toggle
             aria-expanded="false"
-            aria-controls="nav-links"
+            aria-controls="nav-menu"
           >
             <span class="visually-hidden">Menu</span>
             <span class="nav__toggle-bars" aria-hidden="true">
@@ -55,12 +64,22 @@ export function mountNav(container) {
           </button>
         </div>
       </div>
+
+      <div class="nav__menu" id="nav-menu">
+        <p class="nav__menu-eyebrow">Menu</p>
+        <ul class="nav__menu-links">
+          ${NAV_LINKS.map(
+            (link, i) => `<li style="--link-index:${i}"><a href="${link.href}">${link.label}</a></li>`
+          ).join('')}
+        </ul>
+      </div>
     </nav>
   `;
 
   const nav = container.querySelector('.nav');
   const toggle = container.querySelector('[data-nav-toggle]');
-  const links = container.querySelector('#nav-links');
+  const menu = container.querySelector('#nav-menu');
+  const menuLinks = menu.querySelector('.nav__menu-links');
   const trackButtons = container.querySelectorAll('[data-nav-track]');
 
   let lastFocused = null;
@@ -88,7 +107,7 @@ export function mountNav(container) {
 
   function setOpen(open) {
     toggle.setAttribute('aria-expanded', String(open));
-    links.classList.toggle('is-open', open);
+    menu.classList.toggle('is-open', open);
     nav.classList.toggle('nav--menu-open', open);
   }
 
@@ -97,7 +116,7 @@ export function mountNav(container) {
     setOpen(true);
     document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', onKeydown);
-    links.querySelector('a')?.focus();
+    menuLinks.querySelector('a')?.focus();
   }
 
   function closeMenu({ restoreFocus = false } = {}) {
@@ -113,8 +132,18 @@ export function mountNav(container) {
     else openMenu();
   });
 
-  links.addEventListener('click', (event) => {
+  menuLinks.addEventListener('click', (event) => {
     if (event.target.closest('a')) closeMenu();
+  });
+
+  // A live resize that carries the menu open across the 900px desktop
+  // breakpoint would otherwise strand it open with no way to close (the
+  // toggle button itself is desktop-hidden alongside the rest of .nav__menu
+  // -- see the @media rule in nav.css). Closing on the crossing keeps the
+  // two states from ever overlapping.
+  const desktopQuery = window.matchMedia('(min-width: 900px)');
+  desktopQuery.addEventListener('change', (event) => {
+    if (event.matches) closeMenu();
   });
 
   trackButtons.forEach((btn) =>
