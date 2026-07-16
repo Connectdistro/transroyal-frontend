@@ -48,6 +48,15 @@ export class Environment {
     if (this.fog) this.fog.color.set(color);
   }
 
+  /** Restores the shared default fog (color and density both) -- called by
+   *  camera-sync.js whenever the active chapter has no fog override of its
+   *  own, so leaving a chapter that did override it always returns to the
+   *  look every other chapter shares. */
+  resetFog() {
+    this.setFogColor(ROYAL_600);
+    this.setFogDensity(DEFAULT_FOG_DENSITY);
+  }
+
   /** Resolves once Resources has either loaded the world HDR or confirmed no
    *  such manifest entry exists yet -- the graceful fallback is `scene.environment`
    *  simply staying unset. */

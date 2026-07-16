@@ -57,6 +57,23 @@ export const SHOTS = {
     position: { x: -26, y: 6.5, z: -225 },
     target: { x: 12, y: 1.5, z: -340 },
   },
+  air: {
+    // Section 23, Scene 05: "True aerial altitude, 60 meters equivalent or
+    // higher... 24mm wide lens... near-level tilt, 3-5, matching a
+    // cruising-altitude read." The one chapter permitted both exceptions
+    // (Section 11).
+    fov: 62,
+    near: 0.1,
+    far: 2000,
+    position: { x: -10, y: 72, z: -380 },
+    target: { x: 30, y: 66, z: -560 },
+    // The shared global fog (Environment.js) is tuned for the close-range
+    // chapters; at full density it fully saturates this chapter's much
+    // larger distances to flat fog color well before the horizon. Lighter
+    // and less dense here reads as true-altitude haze instead of a solid
+    // wash -- restored to the shared default by camera-sync.js on leaving.
+    fog: { color: 0x4a63a8, density: 0.006 },
+  },
 };
 
 export const DEFAULT_SHOT_ID = 'origin';

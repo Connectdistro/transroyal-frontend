@@ -1,3 +1,5 @@
+import { SHOTS } from './experience/camera/shots.js';
+
 /**
  * The minimal Scroll Engine entry point (Production Handbook Section 16) --
  * maps a scene's lifecycle state (scene-state.js) onto the Production
@@ -14,6 +16,15 @@
  * position/target interpolation within a chapter, not just between them) --
  * that remains a later milestone. This module only guarantees every chapter
  * with a real environment is actually reachable by the camera today.
+ *
+ * Also applies a shot's optional `fog` override (Section 10: atmosphere
+ * "tuned per world region"), if the shot declares one -- the single global
+ * fog (Environment.js) is tuned for the close-range chapters and needs a
+ * lighter touch for chapters spanning much greater distances (Global
+ * Logistics' continental landmass, at full density, fully saturates to flat
+ * fog color well before the horizon). Falls back to Environment's own
+ * default for any scene without an override, so leaving such a chapter
+ * always restores the shared look.
  */
 export function mountCameraSync(worldRoot, experience) {
   const sections = worldRoot ? Array.from(worldRoot.querySelectorAll('[data-scene-id]')) : [];
@@ -22,7 +33,18 @@ export function mountCameraSync(worldRoot, experience) {
   sections.forEach((el) => {
     el.addEventListener('scene:state-change', (event) => {
       if (event.detail.state !== 'active') return;
-      experience.camera.setShot(el.dataset.sceneId, { instant: false });
+      const sceneId = el.dataset.sceneId;
+      experience.camera.setShot(sceneId, { instant: false });
+
+      const fog = SHOTS[sceneId]?.fog;
+      const environment = experience.world?.environment;
+      if (!environment) return;
+      if (fog) {
+        environment.setFogColor(fog.color);
+        environment.setFogDensity(fog.density);
+      } else {
+        environment.resetFog();
+      }
     });
   });
 }

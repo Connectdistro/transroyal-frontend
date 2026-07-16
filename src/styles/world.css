@@ -38,7 +38,8 @@
   .scene--hero,
   #scene-pickup,
   #scene-sorting,
-  #scene-ground {
+  #scene-ground,
+  #scene-air {
     background: transparent;
   }
 
@@ -53,7 +54,10 @@
   #scene-sorting .scene__depth,
   #scene-ground .scene__atmosphere,
   #scene-ground .scene__lighting,
-  #scene-ground .scene__depth {
+  #scene-ground .scene__depth,
+  #scene-air .scene__atmosphere,
+  #scene-air .scene__lighting,
+  #scene-air .scene__depth {
     display: none;
   }
 
