@@ -40,7 +40,8 @@
   #scene-sorting,
   #scene-ground,
   #scene-air,
-  #scene-final-mile {
+  #scene-final-mile,
+  #scene-delivered {
     background: transparent;
   }
 
@@ -61,7 +62,10 @@
   #scene-air .scene__depth,
   #scene-final-mile .scene__atmosphere,
   #scene-final-mile .scene__lighting,
-  #scene-final-mile .scene__depth {
+  #scene-final-mile .scene__depth,
+  #scene-delivered .scene__atmosphere,
+  #scene-delivered .scene__lighting,
+  #scene-delivered .scene__depth {
     display: none;
   }
 

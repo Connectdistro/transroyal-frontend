@@ -85,6 +85,17 @@ export const SHOTS = {
     position: { x: -14, y: 3.2, z: -673 },
     target: { x: 7, y: 1.3, z: -705 },
   },
+  delivered: {
+    // Section 23, Scene 07: "The lowest vantage in the entire journey, just
+    // under 2 meters, near eye-level, held perfectly static -- no tilt, no
+    // residual drift." Target y matches camera y exactly -- level, not
+    // tilted, unlike every other chapter's shot.
+    fov: 35,
+    near: 0.1,
+    far: 1000,
+    position: { x: -6, y: 1.9, z: -782 },
+    target: { x: 4, y: 1.9, z: -806 },
+  },
 };
 
 export const DEFAULT_SHOT_ID = 'origin';

@@ -5,6 +5,7 @@ import { SortingEnvironment } from './world/SortingEnvironment.js';
 import { GroundEnvironment } from './world/GroundEnvironment.js';
 import { AirEnvironment } from './world/AirEnvironment.js';
 import { FinalMileEnvironment } from './world/FinalMileEnvironment.js';
+import { DeliveredEnvironment } from './world/DeliveredEnvironment.js';
 
 /**
  * Every world region is instantiated once, up front, and lives permanently
@@ -23,6 +24,7 @@ export class World {
       new GroundEnvironment(experience),
       new AirEnvironment(experience),
       new FinalMileEnvironment(experience),
+      new DeliveredEnvironment(experience),
     ];
   }
 
