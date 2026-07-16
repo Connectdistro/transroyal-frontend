@@ -11,4 +11,10 @@
     <path d="M12 21s7-7.16 7-12a7 7 0 1 0-14 0c0 4.84 7 12 7 12z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
     <circle cx="12" cy="9" r="2.4" fill="none" stroke="currentColor" stroke-width="1.6" />
   </symbol>
+
+  <!-- Forward arrow: the trailing mark on the nav's text-plus-arrow Track
+       Shipment action -- a quiet motion cue, not a button affordance. -->
+  <symbol id="icon-arrow-right" viewBox="0 0 24 24">
+    <path d="M4 12h15m0 0-5.5-5.5M19 12l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+  </symbol>
 </svg>

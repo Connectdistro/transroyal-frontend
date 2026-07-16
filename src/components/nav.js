@@ -46,8 +46,8 @@ export function mountNav(container) {
 
         <div class="nav__actions">
           <button type="button" class="nav__track-btn" data-nav-track>
-            <svg class="nav__track-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><use href="/icons.svg#icon-track"></use></svg>
             <span>Track Shipment</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><use href="/icons.svg#icon-arrow-right"></use></svg>
           </button>
 
           <button
