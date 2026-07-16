@@ -1,52 +1,42 @@
-const FOOTER_COLUMNS = [
-  {
-    heading: 'Services',
-    links: [
-      { label: 'Express Courier', href: '#scene-pickup' },
-      { label: 'Freight', href: '#scene-ground' },
-      { label: 'Warehousing' },
-      { label: 'International', href: '#scene-air' },
-      { label: 'Supply Chain' },
-    ],
-  },
-  {
-    heading: 'Company',
-    links: [
-      { label: 'About TransRoyal', href: '#scene-origin' },
-      { label: 'Network', href: '#scene-air' },
-      { label: 'Careers' },
-      { label: 'Newsroom' },
-    ],
-  },
-  {
-    heading: 'Support',
-    links: [
-      { label: 'Track a Shipment', action: 'track' },
-      { label: 'Contact Us', href: '#contact' },
-      { label: 'Help Center' },
-      { label: 'Claims' },
-    ],
-  },
+import { SCENES } from '../scroll-world/config.js';
+
+// The muted, in-page column -- mirrors the reference's small "Homepage"
+// anchor list. Reuses the seven-chapter journey directly from config.js
+// rather than duplicating scene labels/ids.
+const JOURNEY_LINKS = SCENES.map((scene) => ({ label: scene.label, href: `#scene-${scene.id}` }));
+
+// The editorial-scale column -- the site's only three real destinations
+// beyond the journey itself. Deliberately short: the previous version
+// listed five additional placeholder items (Warehousing, Careers,
+// Newsroom, Help Center, Claims) with no real destination. The reference's
+// equivalent column is exclusively real, functioning pages, so those are
+// dropped here rather than carried forward as unstyled non-links.
+const PRIMARY_LINKS = [
+  { label: 'Services', href: '#scene-pickup' },
+  { label: 'Track Shipment', action: 'track' },
+  { label: 'Contact', href: '#contact' },
 ];
 
+// No real legal pages exist yet -- renderLink's fallback (a non-focusable
+// <span>) applies here exactly as it did before this rebuild.
 const FOOTER_LEGAL = [{ label: 'Privacy Policy' }, { label: 'Terms of Service' }];
 
 /**
- * Every footer link resolves generically, driven entirely by the data above —
+ * Every link resolves generically, driven entirely by the data above --
  * never a per-label branch:
  *   - `action: 'track'` -> a real button reusing nav.js's existing
  *     tracking-panel trigger (dispatches `transroyal:track-open`, the same
- *     event nav.js's own Track Shipment button uses).
+ *     event nav.js's own Track Shipment action uses).
  *   - `href` present -> a real anchor to an existing page section.
- *   - neither -> an intentional, non-interactive <span>. No destination exists
- *     yet for these (Warehousing, Careers, a real Privacy Policy, etc.), and
- *     this project doesn't invent pages or fake links to paper over that. A
- *     <span> is never focusable, so keyboard users correctly skip it entirely
- *     instead of landing on a link that does nothing.
+ *   - neither -> an intentional, non-interactive <span>. No destination
+ *     exists yet for these, and this project doesn't invent pages or fake
+ *     links to paper over that. A <span> is never focusable, so keyboard
+ *     users correctly skip it entirely instead of landing on a link that
+ *     does nothing.
  */
-function renderFooterLink({ label, href, action }) {
+function renderLink({ label, href, action }) {
   if (action === 'track') {
-    return `<li><button type="button" class="site-footer__action" data-footer-track>${label}</button></li>`;
+    return `<li><button type="button" data-footer-track>${label}</button></li>`;
   }
   if (href) {
     return `<li><a href="${href}">${label}</a></li>`;
@@ -55,36 +45,36 @@ function renderFooterLink({ label, href, action }) {
 }
 
 /**
- * Static footer foundation. Lives outside the pinned scroll-world container — plain
- * document flow, no JS dependency beyond the one tracking-trigger button below.
+ * Rebuilt against the approved design reference (reference/*.png): an
+ * editorial two-zone layout, not a multi-column link directory. A muted
+ * small column (the seven-chapter journey, reusing config.js's own SCENES)
+ * sits beside a headline-scale column of the site's three real
+ * destinations -- footer navigation carrying the same typographic weight
+ * as a hero headline, exactly as the reference treats its own second
+ * column. No boxed sections, no card borders; hierarchy comes from scale
+ * and spacing alone. Lives outside the pinned scroll-world container --
+ * plain document flow, no JS dependency beyond the one tracking-trigger
+ * button.
  */
 export function mountFooter(container) {
   container.innerHTML = `
     <footer class="site-footer" id="contact">
-      <div class="site-footer__top">
-        <div class="site-footer__brand">
-          <span class="site-footer__brand-name">TransRoyal</span>
-          <p>Courier, logistics, and supply-chain services — moving forward, precisely.</p>
+      <div class="site-footer__nav">
+        <div class="site-footer__group site-footer__group--journey">
+          <p class="site-footer__label">The Journey</p>
+          <ul>${JOURNEY_LINKS.map(renderLink).join('')}</ul>
         </div>
 
-        <div class="site-footer__columns">
-          ${FOOTER_COLUMNS.map(
-            (col) => `
-            <div class="site-footer__column">
-              <h3>${col.heading}</h3>
-              <ul>
-                ${col.links.map(renderFooterLink).join('')}
-              </ul>
-            </div>`
-          ).join('')}
+        <div class="site-footer__group site-footer__group--primary">
+          <p class="site-footer__label">Get Started</p>
+          <ul>${PRIMARY_LINKS.map(renderLink).join('')}</ul>
         </div>
       </div>
 
       <div class="site-footer__bottom">
-        <p>&copy; ${new Date().getFullYear()} TransRoyal Courier Services. All rights reserved.</p>
-        <ul class="site-footer__legal">
-          ${FOOTER_LEGAL.map(renderFooterLink).join('')}
-        </ul>
+        <span class="site-footer__brand-name">TransRoyal</span>
+        <ul class="site-footer__legal">${FOOTER_LEGAL.map(renderLink).join('')}</ul>
+        <span class="site-footer__copyright">&copy; ${new Date().getFullYear()} TransRoyal Courier Services</span>
       </div>
     </footer>
   `;
