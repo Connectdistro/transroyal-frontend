@@ -1,24 +1,29 @@
 @layer layout {
+  /* Floating, near-transparent bar at rest -- no heavy header, no visible
+     seam -- so it reads as an overlay on the Three.js world rather than a
+     fixed chrome strip. nav.js toggles `.nav--elevated` once the visitor
+     scrolls past the opening frame, at which point a subtle backdrop fades
+     in for legibility. Background transitions on both states, never a hard
+     cut. */
   .nav {
     position: fixed;
     inset-inline: 0;
     top: 0;
     z-index: 500;
     padding-top: var(--safe-top);
-    background: rgb(5 8 31 / 72%);
-    backdrop-filter: blur(14px) saturate(140%);
-    -webkit-backdrop-filter: blur(14px) saturate(140%);
-    border-bottom: 1px solid var(--border-subtle);
+    background: transparent;
+    border-bottom: 1px solid transparent;
+    transition:
+      background var(--duration-slow) var(--ease-standard),
+      border-color var(--duration-slow) var(--ease-standard),
+      backdrop-filter var(--duration-slow) var(--ease-standard);
+  }
 
-    /* Phase 4 (desktop only): lighter, closer to the reference's near-invisible
-       floating chrome -- less tint, more blur to compensate, the hard seam
-       softened to almost nothing. Tablet/mobile untouched. */
-    @media (min-width: 1024px) {
-      background: rgb(5 8 31 / 42%);
-      backdrop-filter: blur(20px) saturate(150%);
-      -webkit-backdrop-filter: blur(20px) saturate(150%);
-      border-bottom-color: rgb(255 255 255 / 6%);
-    }
+  .nav--elevated {
+    background: rgb(5 8 31 / 46%);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    border-bottom-color: var(--border-subtle);
   }
 
   .nav__inner {
@@ -36,7 +41,11 @@
     }
 
     @media (min-width: 1024px) {
-      padding-inline: 56px;
+      padding-inline: 64px;
+    }
+
+    @media (min-width: 1440px) {
+      padding-inline: 96px;
     }
   }
 
@@ -83,30 +92,33 @@
       font-size: var(--text-sm);
       font-weight: 500;
       padding-bottom: 4px;
-      transition: color var(--duration-fast) var(--ease-standard);
+      transition: color var(--duration-base) var(--ease-standard);
 
       @media (min-width: 1024px) {
         letter-spacing: 0.01em;
       }
 
-      /* Phase 4: an underline that sweeps in on hover, rather than a flat
-         color swap -- reads as an intentional micro-interaction. */
+      /* An indicator that scales in from the left on hover rather than a
+         flat color swap -- a calm, GPU-friendly micro-interaction, never an
+         abrupt change. */
       &::after {
         content: '';
         position: absolute;
         left: 0;
-        right: 100%;
         bottom: 0;
+        width: 100%;
         height: 1px;
         background: var(--accent-strong);
-        transition: right var(--duration-base) var(--ease-standard);
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform var(--duration-base) var(--ease-standard);
       }
 
       &:hover {
         color: var(--white);
 
         &::after {
-          right: 0;
+          transform: scaleX(1);
         }
       }
     }
@@ -143,8 +155,6 @@
 
     &:hover {
       background: var(--electric-400);
-      /* Phase 4: same glow-on-hover language as the hero CTA (Phase 3), so the
-         two premium actions on the page feel like one consistent system. */
       box-shadow: 0 0 24px -6px rgb(79 163 255 / 65%);
       transform: translateY(-1px);
     }
@@ -164,9 +174,14 @@
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-sm);
     cursor: pointer;
+    transition: border-color var(--duration-base) var(--ease-standard);
 
     @media (min-width: 900px) {
       display: none;
+    }
+
+    &:hover {
+      border-color: var(--border-strong);
     }
   }
 
@@ -181,8 +196,9 @@
       height: 2px;
       background: var(--white);
       border-radius: 1px;
-      transition: transform var(--duration-fast) var(--ease-standard),
-        opacity var(--duration-fast) var(--ease-standard);
+      transition:
+        transform var(--duration-base) var(--ease-standard),
+        opacity var(--duration-base) var(--ease-standard);
 
       &:nth-child(1) {
         top: 0;
@@ -208,36 +224,86 @@
     }
   }
 
+  /* Full-screen overlay menu below 900px -- not a dropdown under the bar.
+     A negative z-index here is deliberate: it's scoped to .nav's own
+     stacking context (established by .nav's position:fixed + z-index:500),
+     so it paints below its auto-z-index siblings -- the brand mark, Track
+     Shipment action, and the toggle's close ("X") state -- while still
+     rendering above the rest of the page, since that's what .nav's own 500
+     already guarantees. Those three stay visible and reachable while the
+     menu is open. */
   @media (max-width: 899px) {
     .nav__links {
-      position: absolute;
-      top: 100%;
-      inset-inline: 0;
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      display: flex;
       flex-direction: column;
-      align-items: stretch;
-      gap: 0;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border-subtle);
-      max-height: 0;
-      overflow: hidden;
-      transition: max-height var(--duration-base) var(--ease-standard);
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      background: rgb(5 8 31 / 97%);
+      backdrop-filter: blur(28px) saturate(140%);
+      -webkit-backdrop-filter: blur(28px) saturate(140%);
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(12px);
+      transition:
+        opacity var(--duration-slow) var(--ease-standard),
+        transform var(--duration-slow) var(--ease-standard),
+        visibility 0s linear var(--duration-slow);
 
       &.is-open {
-        display: flex;
-        max-height: 320px;
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+        transition:
+          opacity var(--duration-slow) var(--ease-standard),
+          transform var(--duration-slow) var(--ease-standard),
+          visibility 0s linear;
       }
 
       li {
-        border-top: 1px solid var(--border-subtle);
+        border-top: none;
+        opacity: 0;
+        transform: translateY(14px);
+        transition:
+          opacity var(--duration-slow) var(--ease-standard),
+          transform var(--duration-slow) var(--ease-standard);
+        transition-delay: calc(var(--link-index, 0) * 50ms);
+      }
+
+      &.is-open li {
+        opacity: 1;
+        transform: translateY(0);
       }
 
       a {
-        display: block;
-        padding: 16px 24px;
-        min-height: 44px;
         display: flex;
         align-items: center;
+        justify-content: center;
+        padding: 18px 32px;
+        min-height: 44px;
+        font-size: clamp(1.75rem, 6vw + 1rem, 2.75rem);
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: var(--white);
+        text-align: center;
+
+        &::after {
+          display: none;
+        }
+
+        &:active {
+          opacity: 0.7;
+        }
       }
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .nav__links li {
+      transition-delay: 0ms;
     }
   }
 }
