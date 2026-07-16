@@ -43,6 +43,20 @@ export const SHOTS = {
     position: { x: -16, y: 4.6, z: -150 },
     target: { x: 6, y: 1.5, z: -205 },
   },
+  ground: {
+    // Section 23, Scene 04: "Full elevated establishing height, roughly 3.5
+    // meters, 28-35mm, low horizon carried through the frame." Pulled well
+    // back from the highway's own near edge (fleet spans roughly z -240 to
+    // -340) so a moving truck can never loom into the foreground and
+    // overwhelm the frame -- the first attempt at this distance put a truck
+    // only ~7 units from camera at load, reading as a cluttered mass of
+    // boxes rather than a legible fleet on a highway.
+    fov: 38,
+    near: 0.1,
+    far: 1000,
+    position: { x: -26, y: 6.5, z: -225 },
+    target: { x: 12, y: 1.5, z: -340 },
+  },
 };
 
 export const DEFAULT_SHOT_ID = 'origin';

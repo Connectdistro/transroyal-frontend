@@ -37,7 +37,8 @@
      or 3D, and is never itself decorative art. */
   .scene--hero,
   #scene-pickup,
-  #scene-sorting {
+  #scene-sorting,
+  #scene-ground {
     background: transparent;
   }
 
@@ -49,7 +50,10 @@
   #scene-pickup .scene__depth,
   #scene-sorting .scene__atmosphere,
   #scene-sorting .scene__lighting,
-  #scene-sorting .scene__depth {
+  #scene-sorting .scene__depth,
+  #scene-ground .scene__atmosphere,
+  #scene-ground .scene__lighting,
+  #scene-ground .scene__depth {
     display: none;
   }
 
