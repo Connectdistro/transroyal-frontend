@@ -1,8 +1,8 @@
 # TRANSROYAL PRODUCTION HANDBOOK
 
-Version: 3.0
+Version: 3.1
 
-Status: Production
+Status: Production — Frozen. No further handbook revisions except by explicit request.
 
 Authoritative Document
 
@@ -41,6 +41,7 @@ Authoritative Document
 29. Accessibility
 30. QA Checklist
 31. Future Expansion Rules
+32. Addendum (v3.1) — Art Direction & Production Rules
 
 ---
 
@@ -876,3 +877,65 @@ The master camera path (Section 16) is extended, never rebuilt, when a new chapt
 Any environmental condition not already covered by this handbook — rain, snow, night-for-day, a new world region — requires an explicit addendum to this document before any asset referencing it is generated. No new material or atmosphere language is improvised inline in a single generation prompt.
 
 This handbook describes the finished production experience in full. As the build progresses toward that description, this document does not change to match the build — the build changes to match this document.
+
+---
+
+# 32. ADDENDUM (v3.1) — ART DIRECTION & PRODUCTION RULES
+
+This addendum closes the gap between Sections 1–31, which specify *what* the experience is, and the artistic judgment required to build it consistently. It does not revise anything above. After this addendum, the handbook is frozen — implementation is the only remaining work, and no further handbook revision happens except by explicit request.
+
+## 32.1 Three.js Primacy Mandate
+
+The Three.js world is the website. The HTML/DOM layer is an overlay on top of it — never the reverse. This clarifies and hardens Section 9's layer split.
+
+Every unit of visual experience — light, atmosphere, depth, material, motion — belongs in the WebGL layer. CSS is permitted only for interface chrome (navigation, tracking, footer), text legibility scrims, and typography.
+
+A CSS-authored gradient blob, dot-grid background, or animated SVG line standing in for a real environment is scaffolding, not a finished scene. A scene without a real Three.js environment is unfinished, full stop — there is no such thing as a CSS-only scene that is "done."
+
+Test before shipping any scene: turn off WebGL. If the page still looks art-directed, the balance is wrong.
+
+## 32.2 Art Direction Bible
+
+Composition is asymmetric, never centered, never a symmetric grid — the two authored exceptions are Origin's opening frame and Delivered's closing frame (Section 23), and even those are off-center by design, never dead-center.
+
+Negative space is load-bearing, not leftover. Most of any frame is empty, dark, and quiet. One subject earns the eye per frame — never two competing subjects in the same shot.
+
+Scale communicates trust: structure and machinery read as built for a network, oversized relative to any human figure present.
+
+Hierarchy comes from scale contrast and isolation alone — never from color, never from decorative boxes, never from borders or panels separating content from the world behind it.
+
+Every frame reads as a single photograph, not an assembled interface. If a viewer can point to a distinct floating "card" or "panel," the frame has failed.
+
+## 32.3 Cinematography Bible
+
+Extends the Camera Bible (Section 11) with the judgment behind its numbers.
+
+The quiet third (left / lower-left, per Section 22) stays genuinely empty in every frame — no midground clutter, no secondary light, nothing there to compete for the eye.
+
+Focal points are singular and sit on the dominant bottom-left-to-upper-right sightline — never centered, never doubled.
+
+Vanishing lines — conveyor rails, route lines, structural ribs, road lanes, flight lanes — always converge toward the upper-right. This is the visual rhyme that unifies all seven chapters into one world.
+
+Foreground exists to frame, never to inform. A soft, dark, out-of-focus foreground element deepens a shot; a sharp or legible one competes with it and is wrong.
+
+Depth reads in three discrete layers in every frame: a sparse, sharp foreground; an active midground carrying the chapter's story; a hazy, atmospheric background. Two layers collapsed into one, or a flat single-plane shot, fails the QA checklist regardless of any other criterion it meets.
+
+## 32.4 Environment Language
+
+Extends the Environment Bible (Section 14) with the shared construction vocabulary every location draws from.
+
+**Structure.** Exposed structural ribs, repeating at one consistent module from the Command Center to the Container Port to the Air Cargo Hub, are the world's skeleton, not decoration. Every location shows its bones.
+
+**Material.** Dark, matte-to-satin concrete and painted steel form the base surface everywhere. Glass encloses and reveals depth; it is never a decorative feature wall. Nothing in this world is polished to a showroom finish — it is working infrastructure, engineered and maintained, never a lobby.
+
+**Massing.** Every structure reads as a fragment of something larger extending past the frame. A building never shows its full footprint in a single shot — the network always implies scale beyond what is visible.
+
+**Distinguishing locations.** Locations differ by function and scale only — an atrium's height, a dock's human proportion, a runway's horizon — never by switching material language, color temperature, or architectural style. A visitor recognizes "same world" before they recognize "different place."
+
+## 32.5 Banned Aesthetics
+
+Absolute. No per-scene exceptions.
+
+Never: generic stock-photo warehouse interiors · white or bright office interiors · sci-fi glow props (holograms, floating screens, neon circuitry) · orange, amber, or any warm key light · a scene with more than one competing focal point · floating UI cards over the 3D world · dashboard-style layouts (stat-tile grids, KPI panels, admin-console framing) · glassmorphism as decoration (frosted panels, card drop-shadows, faux depth via blur alone) · Bootstrap-style even-gutter grid layouts · centered symmetric hero compositions outside the two authored Section 23 exceptions · bouncing, overshooting, or elastic motion of any kind · any surface photographed as neutral chrome or silver, or any light or text rendered pure white where an off-white token exists for that purpose.
+
+If a proposed design element appears on this list, it is rejected regardless of how it looks in isolation.
