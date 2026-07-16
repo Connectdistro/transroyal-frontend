@@ -206,6 +206,9 @@ document.querySelector('#app').innerHTML = `
 `;
 
 const experience = mountWorldCanvas(document.querySelector('#world-canvas-root'));
+// Dev-only hook for scripts/snap-scene.cjs (screenshot-based scene QA) --
+// statically eliminated from production builds by Vite's import.meta.env.DEV.
+if (import.meta.env.DEV) window.__experience = experience;
 mountNav(document.querySelector('#nav-root'));
 mountTrackingPanel(document.querySelector('#tracking-root'));
 mountRouteRail(document.querySelector('#route-rail-root'), {

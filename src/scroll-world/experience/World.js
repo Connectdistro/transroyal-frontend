@@ -1,6 +1,7 @@
 import { Environment } from './Environment.js';
 import { OriginEnvironment } from './world/OriginEnvironment.js';
 import { PickupEnvironment } from './world/PickupEnvironment.js';
+import { SortingEnvironment } from './world/SortingEnvironment.js';
 
 /**
  * Every world region is instantiated once, up front, and lives permanently
@@ -12,7 +13,11 @@ export class World {
   constructor(experience) {
     this.experience = experience;
     this.environment = new Environment(experience);
-    this.regions = [new OriginEnvironment(experience), new PickupEnvironment(experience)];
+    this.regions = [
+      new OriginEnvironment(experience),
+      new PickupEnvironment(experience),
+      new SortingEnvironment(experience),
+    ];
   }
 
   update() {

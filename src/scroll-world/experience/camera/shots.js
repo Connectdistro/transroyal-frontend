@@ -34,6 +34,15 @@ export const SHOTS = {
     position: { x: -14, y: 3.4, z: -68 },
     target: { x: 7, y: 1, z: -100 },
   },
+  sorting: {
+    // Section 23, Scene 03: "Elevated mezzanine vantage, roughly 3.5 meters,
+    // tilted 8-10 down a sorting line, held in a wide, steady frame."
+    fov: 35,
+    near: 0.1,
+    far: 1000,
+    position: { x: -16, y: 4.6, z: -150 },
+    target: { x: 6, y: 1.5, z: -205 },
+  },
 };
 
 export const DEFAULT_SHOT_ID = 'origin';
