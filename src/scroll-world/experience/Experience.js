@@ -1,7 +1,7 @@
 import { Sizes } from './Sizes.js';
 import { Time } from './Time.js';
 import { Scene } from './Scene.js';
-import { Camera } from './Camera.js';
+import { CameraRig } from './camera/CameraRig.js';
 import { Renderer } from './Renderer.js';
 import { World } from './World.js';
 import { Resources } from './Resources.js';
@@ -22,7 +22,7 @@ export class Experience {
     this.time = new Time();
     this.scene = new Scene();
     this.resources = new Resources(this);
-    this.camera = new Camera(this);
+    this.camera = new CameraRig(this);
     this.renderer = new Renderer(this);
     this.world = new World(this);
 
@@ -46,6 +46,7 @@ export class Experience {
   }
 
   update() {
+    this.camera.update();
     this.world.update();
     this.renderer.update();
   }

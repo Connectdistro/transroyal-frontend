@@ -1,4 +1,3 @@
-import { Vector3 } from 'three';
 import { createFloor } from './createFloor.js';
 import { createRibs } from './createRibs.js';
 import { createWalkway } from './createWalkway.js';
@@ -6,18 +5,17 @@ import { createRouteLines } from './createRouteLines.js';
 import { createParticles, updateParticles } from './createParticles.js';
 import { createLights } from './createLights.js';
 
-const CAMERA_POSITION = new Vector3(4.2, 4, 19);
-const CAMERA_TARGET = new Vector3(-6, 0.6, -14);
-
 const PULSE_PERIOD = 5200;
 const PULSE_DEPTH = 0.18;
 
 /**
  * The Command Center (Production Handbook Section 23, Scene 01) -- the
  * journey's opening establishing shot. Builds the atrium's geometry and
- * lighting once, frames the shared camera on it, and advances only the
- * ambient motion (particle drift, route-line pulse) each tick. No camera
- * movement and no scroll coupling live here -- this is a single held frame.
+ * lighting once, and advances only the ambient motion (particle drift,
+ * route-line pulse) each tick. Framing is owned entirely by the Production
+ * Camera (Section 11: `camera/CameraRig.js` + its `origin` shot in
+ * `camera/shots.js`) -- this class carries no camera state and never
+ * touches `experience.camera`.
  */
 export class OriginEnvironment {
   constructor(experience) {
@@ -44,14 +42,6 @@ export class OriginEnvironment {
       this.fillLight,
       this.fillLight.target
     );
-
-    this.frameCamera();
-  }
-
-  frameCamera() {
-    const camera = this.experience.camera.instance;
-    camera.position.copy(CAMERA_POSITION);
-    camera.lookAt(CAMERA_TARGET);
   }
 
   update(time) {
