@@ -25,3 +25,6 @@ reference/
 *.njsproj
 *.sln
 *.sw?
+
+# Environment variables
+.env
