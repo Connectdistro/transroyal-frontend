@@ -19,6 +19,21 @@ export const SHOTS = {
     position: { x: 4.2, y: 4, z: 19 },
     target: { x: -6, y: 0.6, z: -14 },
   },
+  pickup: {
+    // Section 23, Scene 02: "Ground-adjacent elevated vantage, roughly 2.5
+    // meters, looking outward from the dock toward the vehicle and street
+    // beyond." 35mm baseline (no exception for this chapter). Pulled back
+    // further from the dock than a literal 2.5m read would suggest -- the
+    // Art Direction Bible (Addendum 32.2) calls for negative space as most
+    // of the frame; a closer position let the dock geometry fill the frame
+    // edge-to-edge with no breathing room. Shot ids match config.js scene
+    // ids 1:1 -- see camera-sync.js.
+    fov: 35,
+    near: 0.1,
+    far: 1000,
+    position: { x: -14, y: 3.4, z: -68 },
+    target: { x: 7, y: 1, z: -100 },
+  },
 };
 
 export const DEFAULT_SHOT_ID = 'origin';

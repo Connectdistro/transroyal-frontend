@@ -1,14 +1,21 @@
 import { Environment } from './Environment.js';
 import { OriginEnvironment } from './world/OriginEnvironment.js';
+import { PickupEnvironment } from './world/PickupEnvironment.js';
 
+/**
+ * Every world region is instantiated once, up front, and lives permanently
+ * in the scene graph (Section 9: "a single continuous scene graph, not seven
+ * independent scenes swapped in and out"). Adding a chapter's environment is
+ * a two-line change here: import the class, add one instance to `regions`.
+ */
 export class World {
   constructor(experience) {
     this.experience = experience;
     this.environment = new Environment(experience);
-    this.origin = new OriginEnvironment(experience);
+    this.regions = [new OriginEnvironment(experience), new PickupEnvironment(experience)];
   }
 
   update() {
-    this.origin.update(this.experience.time);
+    this.regions.forEach((region) => region.update(this.experience.time));
   }
 }

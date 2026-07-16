@@ -11,6 +11,7 @@ import { SCENES } from './scroll-world/config.js';
 import { MOBILE_MEDIA_QUERY } from './scroll-world/breakpoints.js';
 import { mountWorldCanvas } from './scroll-world/world-canvas.js';
 import { mountSceneState } from './scroll-world/scene-state.js';
+import { mountCameraSync } from './scroll-world/camera-sync.js';
 import { mountScenePreload } from './scroll-world/scene-preload.js';
 import { mountNav } from './components/nav.js';
 import { mountTrackingPanel } from './components/tracking-panel.js';
@@ -204,12 +205,13 @@ document.querySelector('#app').innerHTML = `
   <div id="footer-root"></div>
 `;
 
-mountWorldCanvas(document.querySelector('#world-canvas-root'));
+const experience = mountWorldCanvas(document.querySelector('#world-canvas-root'));
 mountNav(document.querySelector('#nav-root'));
 mountTrackingPanel(document.querySelector('#tracking-root'));
 mountRouteRail(document.querySelector('#route-rail-root'), {
   worldRoot: document.querySelector('#world'),
 });
 mountSceneState(document.querySelector('#world'));
+mountCameraSync(document.querySelector('#world'), experience);
 mountScenePreload(document.querySelector('#world'));
 mountFooter(document.querySelector('#footer-root'));

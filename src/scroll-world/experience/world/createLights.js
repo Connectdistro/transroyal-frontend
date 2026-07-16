@@ -7,11 +7,27 @@ const ROYAL_600 = 0x2540b0;
  *  the scene's accent from upper-right; fill carries the constant royal-blue
  *  floor from lower-left. Neither is a point/spot falloff light -- both read
  *  as broad, even washes, matching the CSS glow blobs this doctrine was
- *  derived from. */
-export function createLights() {
-  const key = new DirectionalLight(ELECTRIC_500, 3.8);
-  key.position.set(13, 15, 9);
-  key.target.position.set(0, 1, -16);
+ *  derived from.
+ *
+ *  Parameterized (Addendum 32.1) so every chapter's environment reuses this
+ *  one rig rather than reimplementing it -- only position/color/intensity
+ *  differ per chapter's own Section 23 spec; the two-source doctrine itself
+ *  never does. Defaults reproduce Origin's original, unparameterized values
+ *  exactly, so the existing `createLights()` call in OriginEnvironment is
+ *  unchanged. */
+export function createLights({
+  keyColor = ELECTRIC_500,
+  keyIntensity = 3.8,
+  keyPosition = [13, 15, 9],
+  keyTarget = [0, 1, -16],
+  fillColor = ROYAL_600,
+  fillIntensity = 1.4,
+  fillPosition = [-14, 8, -6],
+  fillTarget = keyTarget,
+} = {}) {
+  const key = new DirectionalLight(keyColor, keyIntensity);
+  key.position.set(...keyPosition);
+  key.target.position.set(...keyTarget);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
   key.shadow.camera.near = 1;
@@ -22,9 +38,9 @@ export function createLights() {
   key.shadow.camera.bottom = -30;
   key.shadow.bias = -0.0015;
 
-  const fill = new DirectionalLight(ROYAL_600, 1.4);
-  fill.position.set(-14, 8, -6);
-  fill.target.position.set(0, 1, -16);
+  const fill = new DirectionalLight(fillColor, fillIntensity);
+  fill.position.set(...fillPosition);
+  fill.target.position.set(...fillTarget);
 
   return { key, fill };
 }

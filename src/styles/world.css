@@ -21,25 +21,31 @@
     }
   }
 
-  /* --- Scene 1: Command Center / Network Origin --- */
-  /* The Three.js world (Production Handbook Section 23, Scene 01) now renders
-     the environment on the persistent WebGL canvas behind the whole page
-     (#world-canvas-root, world-canvas.css, z-index -1). The hero section
-     itself must stay transparent so that canvas shows through -- an opaque
-     CSS background here would paint over it regardless of DOM order, since
-     z-index -1 always sits below a z-index:auto element. Its own CSS
-     decorative layers (atmosphere grid, glow blobs, SVG route lines) are
-     retired for this reason too, scoped to .scene--hero only -- Scenes 2-7
-     keep theirs unchanged until their own Three.js environment lands. The
-     scrim stays: it protects copy legibility against whatever the 3D scene's
-     brightness happens to be at this point in frame, not decorative art. */
-  .scene--hero {
+  /* --- Scenes with a real Three.js environment (World Bible, Section 8) --- */
+  /* Each chapter's environment (Production Handbook Section 23) renders on
+     the persistent WebGL canvas behind the whole page (#world-canvas-root,
+     world-canvas.css, z-index -1). A scene with a real environment must stay
+     transparent so that canvas shows through -- an opaque CSS background
+     here would paint over it regardless of DOM order, since z-index -1
+     always sits below a z-index:auto element. Its own CSS decorative layers
+     (atmosphere grid, glow blobs, SVG route lines) retire for the same
+     reason. This selector list grows by one scene id at a time as each
+     chapter's environment lands (Section 01 Origin, Section 02 Pickup, ...);
+     any scene not yet listed here keeps its CSS-authored placeholder art
+     unchanged. The scrim stays on every scene regardless of this list -- it
+     protects copy legibility against whatever brightness sits behind it, CSS
+     or 3D, and is never itself decorative art. */
+  .scene--hero,
+  #scene-pickup {
     background: transparent;
   }
 
   .scene--hero .scene__atmosphere,
   .scene--hero .scene__lighting,
-  .scene--hero .scene__depth {
+  .scene--hero .scene__depth,
+  #scene-pickup .scene__atmosphere,
+  #scene-pickup .scene__lighting,
+  #scene-pickup .scene__depth {
     display: none;
   }
 
@@ -521,22 +527,13 @@
   }
 
   /* ==========================================================================
-     Phase 5: Scene 2 (Pickup) visual rebuild. Scoped entirely to #scene-pickup
-     -- the shared .scene--journey/[data-composition='operational'] rules above
-     are untouched, so Scenes 3-7 (which also use them) are unaffected.
+     Scene 2 (Pickup) interface treatment. Scoped entirely to #scene-pickup --
+     the shared .scene--journey/[data-composition='operational'] rules above
+     are untouched, so Scenes 3-7 (which also use them) are unaffected. The
+     scene's own CSS background gradient retired above, alongside Origin's,
+     once Pickup's real Three.js environment (world/PickupEnvironment.js)
+     landed -- only its typography and interaction treatment remain here.
      ========================================================================== */
-  #scene-pickup {
-    /* Front to back: a top-left glow echoing the hero's bottom-left royal-600
-       glow position/color, for a felt continuity across the Hero -> Scene 2
-       seam; a bottom-right glow in the scene's own accent (--scene-accent,
-       set inline from config.js); the original hairline highlight and base
-       gradient, unchanged. */
-    background:
-      radial-gradient(55% 45% at 15% 0%, rgb(37 64 176 / 20%) 0%, transparent 55%),
-      radial-gradient(70% 60% at 85% 90%, rgb(79 163 255 / 20%) 0%, transparent 42%),
-      radial-gradient(50% 45% at 78% 12%, rgb(255 255 255 / 4%), transparent 60%),
-      linear-gradient(180deg, var(--navy-950) 0%, var(--navy-900) 45%, var(--navy-950) 100%);
-  }
 
   @media (min-width: 1024px) {
     #scene-pickup .scene__copy {
