@@ -1,11 +1,11 @@
 @layer layout {
-  /* Floating, near-transparent bar at rest -- no heavy header, no visible
-     seam -- so it reads as a caption sitting on the Three.js world (Handbook
-     Section 18) rather than a fixed chrome strip. nav.js toggles
-     `.nav--elevated` once the visitor scrolls past the opening frame, at
-     which point a whisper of a backdrop fades in for legibility -- still far
-     short of a panel that competes with the world behind it. Background
-     transitions on both states, never a hard cut. */
+  /* Rebuilt against the approved design reference (reference/*.png): a
+     floating architectural element, not a website header. No horizontal
+     link row at any width -- see the class doc in nav.js. Stays fully
+     transparent at rest; nav.js toggles `.nav--elevated` once the visitor
+     scrolls past the opening frame, at which point the faintest possible
+     backdrop fades in for legibility, never a panel competing with the
+     world behind it. */
   .nav {
     position: fixed;
     inset-inline: 0;
@@ -21,27 +21,20 @@
   }
 
   .nav--elevated {
-    background: rgb(5 8 31 / 22%);
+    background: rgb(5 8 31 / 20%);
     backdrop-filter: blur(20px) saturate(140%);
     -webkit-backdrop-filter: blur(20px) saturate(140%);
-    border-bottom-color: rgb(255 255 255 / 6%);
+    border-bottom-color: rgb(255 255 255 / 5%);
   }
 
-  /* Three-column grid, not a flex row with links clustered next to actions
-     -- brand and actions each claim an equal 1fr, so the link row is always
-     truly centered in the bar regardless of either side's own width. This
-     is the single biggest structural change from the previous flex layout:
-     centered wayfinding reads as an architectural, considered arrangement
-     rather than a typical left-brand/right-everything-else SaaS navbar. */
-  .nav__inner {
+  .nav__bar {
     height: var(--nav-height-mobile);
-    max-width: 1600px;
+    max-width: 1920px;
     margin-inline: auto;
     padding-inline: 20px;
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    display: flex;
     align-items: center;
-    column-gap: 24px;
+    justify-content: space-between;
 
     @media (min-width: 640px) {
       height: var(--nav-height);
@@ -49,34 +42,37 @@
     }
 
     @media (min-width: 1024px) {
-      padding-inline: 72px;
+      padding-inline: 64px;
     }
 
     @media (min-width: 1440px) {
-      padding-inline: 120px;
+      padding-inline: 96px;
     }
 
     @media (min-width: 1920px) {
-      padding-inline: 160px;
+      padding-inline: 140px;
     }
+  }
+
+  /* Brand, divider, and menu toggle clustered together on the left --
+     matching the reference's logo-divider-hamburger group -- rather than
+     the toggle isolated on the opposite edge the way a conventional site
+     header places it. */
+  .nav__cluster {
+    display: flex;
+    align-items: center;
+    gap: 16px;
   }
 
   .nav__brand {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 9px;
     text-decoration: none;
     color: var(--white);
     font-weight: 500;
     letter-spacing: 0.01em;
-    font-size: 1.05rem;
-    grid-column: 1;
-    justify-self: start;
-
-    @media (min-width: 1024px) {
-      gap: 14px;
-      font-size: 1.1rem;
-    }
+    font-size: 0.98rem;
   }
 
   .nav__brand-mark {
@@ -84,137 +80,28 @@
     color: var(--electric-500);
   }
 
-  /* Desktop's inline link row -- centered (see .nav__inner). Never present
-     below 900px -- the full-screen .nav__menu (its own independent element,
-     not this one reflowed) is the only mobile menu. See the class doc in
-     nav.js for why these are two elements rather than one dual-role
-     element. */
-  .nav__links {
-    display: none;
-    align-items: center;
-    gap: 48px;
-    grid-column: 2;
-
-    @media (min-width: 900px) {
-      display: flex;
-    }
-
-    @media (min-width: 1440px) {
-      gap: 64px;
-    }
-
-    a {
-      position: relative;
-      text-decoration: none;
-      color: var(--text-dim);
-      font-size: var(--text-xs);
-      font-weight: 400;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      padding-bottom: 6px;
-      transition: color var(--duration-base) var(--ease-standard);
-
-      /* An indicator that scales in from the left on hover rather than a
-         flat color swap -- a calm, GPU-friendly micro-interaction, never an
-         abrupt change. */
-      &::after {
-        content: '';
-        position: absolute;
-        left: 0;
-        bottom: 0;
-        width: 100%;
-        height: 1px;
-        background: var(--accent-strong);
-        transform: scaleX(0);
-        transform-origin: left;
-        transition: transform var(--duration-base) var(--ease-standard);
-      }
-
-      &:hover {
-        color: var(--white);
-
-        &::after {
-          transform: scaleX(1);
-        }
-      }
-    }
-  }
-
-  .nav__actions {
-    display: flex;
-    align-items: center;
-    gap: 28px;
-    /* Explicit, not relied-on DOM-order auto-placement: below 900px,
-       .nav__links is display:none and so is excluded from the grid
-       entirely, which shifts an auto-placed .nav__actions into the empty
-       middle column instead of the right one -- verified as a real bug via
-       computed grid-template-columns, not a hypothetical. */
-    grid-column: 3;
-    justify-self: end;
-  }
-
-  /* Track Shipment reads as the last item in the wayfinding row, not a
-     separate SaaS conversion button -- a quiet text-plus-arrow treatment in
-     the accent color is the only thing that marks it as the one action a
-     visitor can always reach (Section 18), never a bordered pill or a solid
-     fill competing with the world behind it. */
-  .nav__track-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    background: transparent;
-    border: none;
-    color: var(--accent-strong);
-    padding: 0;
-    font-weight: 500;
-    font-size: var(--text-xs);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: color var(--duration-base) var(--ease-standard);
-
-    span {
-      @media (max-width: 400px) {
-        display: none;
-      }
-    }
-
-    svg {
-      transition: transform var(--duration-base) var(--ease-standard);
-    }
-
-    &:hover {
-      color: var(--white);
-
-      svg {
-        transform: translateX(3px);
-      }
-    }
-
-    &:active {
-      opacity: 0.8;
-    }
+  .nav__divider {
+    width: 1px;
+    height: 16px;
+    background: rgb(255 255 255 / 20%);
   }
 
   .nav__toggle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 38px;
-    height: 38px;
+    width: 32px;
+    height: 32px;
+    margin-inline-start: -7px;
     background: transparent;
     border: none;
     cursor: pointer;
-
-    @media (min-width: 900px) {
-      display: none;
-    }
   }
 
   .nav__toggle-bars {
     position: relative;
-    width: 18px;
-    height: 14px;
+    width: 17px;
+    height: 12px;
 
     span {
       position: absolute;
@@ -230,130 +117,217 @@
         top: 0;
       }
       &:nth-child(2) {
-        top: 6px;
+        top: 5.5px;
       }
       &:nth-child(3) {
-        top: 12px;
+        top: 11px;
       }
     }
   }
 
   .nav--menu-open .nav__toggle-bars {
     span:nth-child(1) {
-      transform: translateY(6px) rotate(45deg);
+      transform: translateY(5.5px) rotate(45deg);
     }
     span:nth-child(2) {
       opacity: 0;
     }
     span:nth-child(3) {
-      transform: translateY(-6px) rotate(-45deg);
+      transform: translateY(-5.5px) rotate(-45deg);
     }
   }
 
-  /* The full-screen mobile menu (Handbook Section 18/19: an overlay the
-     cinematic world recedes behind rather than disappearing behind). Always
-     present in the DOM below 900px, `display: none` above it -- its own
-     closed state (opacity 0, hidden) never changes value as a side effect
-     of the viewport crossing that boundary, only when `.is-open` is
-     explicitly toggled by nav.js. See the class doc in nav.js for the bug
-     this structure avoids. */
-  .nav__menu {
-    display: none;
-  }
+  /* The bar's one quiet utility action -- plain text at the same visual
+     weight a language toggle would carry in the reference, never a bordered
+     pill or filled button. Track Shipment's real prominence lives inside
+     the overlay (.nav__menu-track), not here. */
+  .nav__track-btn {
+    position: relative;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    padding: 4px 0;
+    font-weight: 400;
+    font-size: var(--text-2xs);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: color var(--duration-base) var(--ease-standard);
 
-  @media (max-width: 899px) {
-    .nav__menu {
-      display: flex;
-      position: fixed;
-      inset: 0;
-      z-index: -1;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 28px;
-      padding: 0 32px;
-      background: rgb(5 8 31 / 90%);
-      backdrop-filter: blur(24px) saturate(140%);
-      -webkit-backdrop-filter: blur(24px) saturate(140%);
-      opacity: 0;
-      visibility: hidden;
-      transform: translateY(12px);
-      transition:
-        opacity var(--duration-slow) var(--ease-standard),
-        transform var(--duration-slow) var(--ease-standard),
-        visibility 0s linear var(--duration-slow);
+    &::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 100%;
+      height: 1px;
+      background: currentColor;
+      transform: scaleX(0);
+      transform-origin: right;
+      transition: transform var(--duration-base) var(--ease-standard);
+    }
 
-      &.is-open {
-        opacity: 1;
-        visibility: visible;
-        transform: translateY(0);
-        transition:
-          opacity var(--duration-slow) var(--ease-standard),
-          transform var(--duration-slow) var(--ease-standard),
-          visibility 0s linear;
+    &:hover {
+      color: var(--white);
+
+      &::after {
+        transform: scaleX(1);
+        transform-origin: left;
       }
     }
+  }
 
-    .nav__menu-eyebrow {
-      margin: 0;
-      color: var(--accent-strong);
-      font-size: var(--text-xs);
-      font-weight: 500;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
+  /* ==========================================================================
+     Full-screen overlay -- the single navigation surface at every viewport
+     width (Handbook Section 18/19: the cinematic world recedes behind it
+     rather than disappearing behind a conventional dropdown). A negative
+     z-index here is deliberate: scoped to .nav's own stacking context
+     (position:fixed + z-index:500), it paints below its auto-z-index
+     siblings -- the brand mark, toggle, and Track Shipment text -- while
+     still rendering above the rest of the page, since that's what .nav's
+     own 500 already guarantees.
+     ========================================================================== */
+  .nav__menu {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    display: flex;
+    align-items: flex-end;
+    padding: 0 20px max(48px, var(--safe-bottom));
+    background: rgb(5 8 31 / 94%);
+    backdrop-filter: blur(32px) saturate(140%);
+    -webkit-backdrop-filter: blur(32px) saturate(140%);
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      opacity var(--duration-slow) var(--ease-standard),
+      visibility 0s linear var(--duration-slow);
+
+    &.is-open {
+      opacity: 1;
+      visibility: visible;
+      transition:
+        opacity var(--duration-slow) var(--ease-standard),
+        visibility 0s linear;
+    }
+
+    @media (min-width: 640px) {
+      padding: 0 32px max(56px, var(--safe-bottom));
+    }
+
+    @media (min-width: 1024px) {
+      padding: 0 64px max(72px, var(--safe-bottom));
+    }
+
+    @media (min-width: 1440px) {
+      padding: 0 96px max(88px, var(--safe-bottom));
+    }
+  }
+
+  .nav__menu-inner {
+    width: 100%;
+  }
+
+  .nav__menu-eyebrow {
+    margin: 0 0 20px;
+    color: var(--accent-strong);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    opacity: 0;
+    transform: translateY(10px);
+    transition:
+      opacity var(--duration-slow) var(--ease-standard),
+      transform var(--duration-slow) var(--ease-standard);
+  }
+
+  .nav__menu.is-open .nav__menu-eyebrow {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .nav__menu-links {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    li {
       opacity: 0;
-      transform: translateY(10px);
+      transform: translateY(18px);
       transition:
         opacity var(--duration-slow) var(--ease-standard),
         transform var(--duration-slow) var(--ease-standard);
+      transition-delay: calc((var(--link-index, 0) * 60ms) + 60ms);
     }
 
-    .nav__menu.is-open .nav__menu-eyebrow {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    .nav__menu-links {
-      display: flex;
-      flex-direction: column;
+    a {
+      display: inline-flex;
+      padding: 10px 0;
+      min-height: 44px;
       align-items: center;
-      gap: 10px;
+      font-size: clamp(2.25rem, 4vw + 1.2rem, 5.25rem);
+      font-weight: 300;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+      color: var(--white);
+      text-decoration: none;
+      transition: color var(--duration-base) var(--ease-standard);
 
-      li {
-        opacity: 0;
-        transform: translateY(14px);
-        transition:
-          opacity var(--duration-slow) var(--ease-standard),
-          transform var(--duration-slow) var(--ease-standard);
-        transition-delay: calc((var(--link-index, 0) * 50ms) + 60ms);
+      &:hover {
+        color: var(--accent-strong);
       }
 
-      a {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 14px 24px;
-        min-height: 44px;
-        font-size: clamp(1.65rem, 6vw + 1rem, 2.5rem);
-        font-weight: 500;
-        letter-spacing: -0.01em;
-        color: var(--white);
-        text-align: center;
-
-        &:active {
-          opacity: 0.7;
-        }
+      &:active {
+        opacity: 0.7;
       }
-    }
-
-    .nav__menu.is-open .nav__menu-links li {
-      opacity: 1;
-      transform: translateY(0);
     }
   }
 
+  .nav__menu-track {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 32px;
+    background: transparent;
+    border: none;
+    padding: 10px 0;
+    color: var(--accent-strong);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(18px);
+    transition:
+      opacity var(--duration-slow) var(--ease-standard),
+      transform var(--duration-slow) var(--ease-standard),
+      color var(--duration-base) var(--ease-standard);
+    transition-delay: calc((var(--link-index, 0) * 60ms) + 60ms);
+
+    svg {
+      transition: transform var(--duration-base) var(--ease-standard);
+    }
+
+    &:hover {
+      color: var(--white);
+
+      svg {
+        transform: translateX(3px);
+      }
+    }
+  }
+
+  .nav__menu.is-open .nav__menu-links li,
+  .nav__menu.is-open .nav__menu-track {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    .nav__menu-links li {
+    .nav__menu-links li,
+    .nav__menu-track {
       transition-delay: 0ms;
     }
   }

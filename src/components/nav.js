@@ -11,44 +11,31 @@ const FOCUSABLE_SELECTOR =
 const SCROLL_ELEVATE_THRESHOLD = 40;
 
 /**
- * Mounts the persistent primary navigation. A floating, near-transparent bar
- * at rest -- it only gains a whisper of a backdrop once the visitor scrolls
- * past the opening frame, never a heavy fixed header. Dispatches
- * `transroyal:track-open` on document when Track Shipment is used;
- * tracking-panel.js listens for it.
+ * Mounts the persistent primary navigation. Rebuilt from first principles
+ * against the approved design reference (reference/*.png): there is no
+ * horizontal link row at any viewport width. The bar itself carries only a
+ * brand mark, a divider, and a menu toggle clustered on the left, plus one
+ * quiet text action on the right -- every primary destination lives inside
+ * the single full-screen overlay this toggle opens, at every breakpoint.
+ * The reference doesn't distinguish "desktop nav" from "mobile nav"; it's
+ * the same mechanism throughout, so this file no longer does either.
  *
- * Desktop's inline link row (`.nav__links`) and the sub-900px full-screen
- * overlay (`.nav__menu`) are deliberately two separate elements, each
- * rendered from the same NAV_LINKS data, rather than one element that
- * changes role across the breakpoint. A single dual-role element previously
- * caused a real bug: crossing the 900px breakpoint while the page was open
- * made the browser animate the overlay's opacity/transform transition (only
- * ever meant to run on an explicit open/close) as a side effect of the
- * media query itself flipping -- a flash of full-screen menu text over the
- * hero. Two independent elements can't have that cross-breakpoint transition
- * at all: `.nav__menu` is `display: none` above 900px, and below it, its own
- * closed state never changes value as a result of viewport width.
+ * Dispatches `transroyal:track-open` on document when either Track Shipment
+ * action is used; tracking-panel.js listens for it.
  */
 export function mountNav(container) {
   container.innerHTML = `
     <nav class="nav" aria-label="Primary">
-      <div class="nav__inner">
-        <a class="nav__brand" href="#top">
-          <span class="nav__brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 32 32" width="26" height="26"><use href="/icons.svg#icon-mark"></use></svg>
-          </span>
-          <span class="nav__brand-name">TransRoyal</span>
-        </a>
+      <div class="nav__bar">
+        <div class="nav__cluster">
+          <a class="nav__brand" href="#top">
+            <span class="nav__brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 32 32" width="22" height="22"><use href="/icons.svg#icon-mark"></use></svg>
+            </span>
+            <span class="nav__brand-name">TransRoyal</span>
+          </a>
 
-        <ul class="nav__links">
-          ${NAV_LINKS.map((link) => `<li><a href="${link.href}">${link.label}</a></li>`).join('')}
-        </ul>
-
-        <div class="nav__actions">
-          <button type="button" class="nav__track-btn" data-nav-track>
-            <span>Track Shipment</span>
-            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><use href="/icons.svg#icon-arrow-right"></use></svg>
-          </button>
+          <span class="nav__divider" aria-hidden="true"></span>
 
           <button
             type="button"
@@ -63,15 +50,23 @@ export function mountNav(container) {
             </span>
           </button>
         </div>
+
+        <button type="button" class="nav__track-btn" data-nav-track>Track Shipment</button>
       </div>
 
       <div class="nav__menu" id="nav-menu">
-        <p class="nav__menu-eyebrow">Menu</p>
-        <ul class="nav__menu-links">
-          ${NAV_LINKS.map(
-            (link, i) => `<li style="--link-index:${i}"><a href="${link.href}">${link.label}</a></li>`
-          ).join('')}
-        </ul>
+        <div class="nav__menu-inner">
+          <p class="nav__menu-eyebrow">Menu</p>
+          <ul class="nav__menu-links">
+            ${NAV_LINKS.map(
+              (link, i) => `<li style="--link-index:${i}"><a href="${link.href}">${link.label}</a></li>`
+            ).join('')}
+          </ul>
+          <button type="button" class="nav__menu-track" data-nav-track style="--link-index:${NAV_LINKS.length}">
+            <span>Track Shipment</span>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href="/icons.svg#icon-arrow-right"></use></svg>
+          </button>
+        </div>
       </div>
     </nav>
   `;
@@ -132,18 +127,8 @@ export function mountNav(container) {
     else openMenu();
   });
 
-  menuLinks.addEventListener('click', (event) => {
+  menu.addEventListener('click', (event) => {
     if (event.target.closest('a')) closeMenu();
-  });
-
-  // A live resize that carries the menu open across the 900px desktop
-  // breakpoint would otherwise strand it open with no way to close (the
-  // toggle button itself is desktop-hidden alongside the rest of .nav__menu
-  // -- see the @media rule in nav.css). Closing on the crossing keeps the
-  // two states from ever overlapping.
-  const desktopQuery = window.matchMedia('(min-width: 900px)');
-  desktopQuery.addEventListener('change', (event) => {
-    if (event.matches) closeMenu();
   });
 
   trackButtons.forEach((btn) =>
