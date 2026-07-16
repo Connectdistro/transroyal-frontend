@@ -56,7 +56,10 @@
   --text-md: 1.15rem;
   --text-lg: clamp(1.5rem, 2vw + 1rem, 2.25rem);
   --text-xl: clamp(1.35rem, 1.6vw + 0.9rem, 1.9rem);
-  --text-2xl: clamp(2.75rem, 6vw + 1rem, 6.5rem);
+  /* Hero h1 only (the sole current consumer) -- pushed further per the
+     approved design reference (reference/*.png): typography should
+     breathe, not just be large. */
+  --text-2xl: clamp(2.75rem, 6.5vw + 1rem, 7.5rem);
 
   /* --- layout --- */
   --nav-height: 72px;

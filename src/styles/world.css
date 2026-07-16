@@ -394,15 +394,17 @@
   }
 
   .scene--hero h1 {
-    /* Tighter leading as the display size grows -- --text-2xl now scales up to
-       6.5rem at desktop (Phase 1: Alireza-inspired hero rebuild), and large
-       display type reads more premium with less line-height slack. */
-    line-height: 0.98;
-    /* Phase 3: tighter tracking at this scale (base.css's global -0.02em is
-       tuned for the smaller h2/h3 sizes) plus a soft dark shadow for depth and
-       legibility over whatever sits behind it -- CSS gradients today, real
-       photographic/video content later. */
-    letter-spacing: -0.03em;
+    /* Rebuilt against the approved design reference (reference/*.png): a
+       lighter weight than base.css's global h1 600 reads as considered and
+       editorial at this scale, the way the reference's serif headline never
+       needs boldness to command the frame -- scale and isolation carry the
+       hierarchy instead (Addendum 32.2). Line-height opened back up slightly
+       from the previous 0.98 to suit the lighter weight; tighter tracking
+       than body copy, plus a soft dark shadow for legibility over whatever
+       sits behind it. */
+    font-weight: 300;
+    line-height: 1.04;
+    letter-spacing: -0.015em;
     text-shadow: 0 4px 32px rgb(0 0 10 / 45%);
   }
 
@@ -423,31 +425,51 @@
 
   .scene--hero .scene__body {
     font-size: var(--text-md);
-    margin-top: 28px;
+    margin-top: 36px;
     max-width: 480px;
   }
 
   .scene--hero .scene__cta {
-    margin-top: 40px;
+    margin-top: 52px;
   }
 
-  /* Phase 2, desktop only: more generous side margin and a clearer two-group
+  /* Desktop-and-up: more generous side margin and a clearer two-group
      rhythm (identity: eyebrow+title close together / action: body+CTA set
-     further apart) at real desktop widths -- matches the reference's
-     deliberate breathing room without touching tablet/mobile. */
+     further apart), scaling up through the same breakpoints nav.css now
+     uses so the two components share one consistent margin system. */
   @media (min-width: 1024px) {
     .scene--hero {
       padding-inline: 96px;
     }
 
+    .scene--hero .scene__eyebrow {
+      margin-bottom: 22px;
+    }
+
     .scene--hero .scene__body {
-      margin-top: 36px;
+      margin-top: 44px;
       max-width: 520px;
+    }
+
+    .scene--hero .scene__cta {
+      margin-top: 64px;
     }
 
     .scene--hero .scene__lighting {
       max-width: 680px;
       max-height: 680px;
+    }
+  }
+
+  @media (min-width: 1440px) {
+    .scene--hero {
+      padding-inline: 128px;
+    }
+  }
+
+  @media (min-width: 1920px) {
+    .scene--hero {
+      padding-inline: 160px;
     }
   }
 
