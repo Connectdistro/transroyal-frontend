@@ -85,7 +85,12 @@ const PHASE_DEPART_END = 22000;
 
 const DOCK_TRUCK_WAYPOINT_Z = DOCK_CENTER_Z + 14; // the existing dock spot
 const QUEUE_WAYPOINT_Z = DOCK_CENTER_Z + 30; // the existing queue spot
-const SPAWN_WAYPOINT_Z = DOCK_CENTER_Z + 55; // off-yard -- arrives from/departs to here
+// Ground Chapter Cinematic Realism Pass, Commit 5 (composition review): a
+// live-camera snapshot caught a transiting truck looming uncomfortably
+// large -- the original +55 offset put SPAWN only 30 units from the
+// camera (z=-225). Pulled to +40 (50 units out) so a truck reads as
+// "just entered the yard," not oversized, throughout its whole transit.
+const SPAWN_WAYPOINT_Z = DOCK_CENTER_Z + 40; // off-yard -- arrives from/departs to here
 const DOOR_CLOSED_Y = 2.5;
 const DOOR_OPEN_Y = 2.5 + 4.6;
 const DOCK_MOTION_HALF_LIFE_MS = 900;
@@ -375,10 +380,13 @@ function createForklift(seed) {
 
 function createHighway() {
   const group = new Group();
-  const asphalt = new Mesh(
-    new BoxGeometry(48, 0.3, HIGHWAY_LENGTH),
-    new MeshPhysicalMaterial({ color: ASPHALT_COLOR, metalness: 0.1, roughness: 0.9, clearcoat: 0 })
-  );
+  const asphaltMaterial = new MeshPhysicalMaterial({ color: ASPHALT_COLOR, metalness: 0.1, roughness: 0.9, clearcoat: 0 });
+  // Ground Chapter Cinematic Realism Pass, Commit 5: a single subtle nudge
+  // (one mesh, not per-instance -- only one highway exists) so the surface
+  // isn't a perfectly uniform roughness value, same varyMaterial() bounds
+  // as everywhere else in this phase.
+  varyMaterial(asphaltMaterial, 600);
+  const asphalt = new Mesh(new BoxGeometry(48, 0.3, HIGHWAY_LENGTH), asphaltMaterial);
   asphalt.position.set(0, -0.15, REGION_Z);
   asphalt.receiveShadow = true;
   group.add(asphalt);
@@ -403,12 +411,19 @@ function createHighway() {
  *  here, unchanged, receding past the target point exactly as before. */
 function createHubSilhouettes() {
   const group = new Group();
-  const material = new MeshStandardMaterial({ color: HUB_COLOR, roughness: 0.7, metalness: 0.2 });
+  // Ground Chapter Cinematic Realism Pass, Commit 5: previously one shared
+  // material instance across both hubs -- cloned + varied per instance,
+  // the same technique already used for Sorting's parcels (Cinematic
+  // Polish Phase, Commit 5), so the two background silhouettes read as
+  // distinct structures rather than a stamped copy.
+  const baseMaterial = new MeshStandardMaterial({ color: HUB_COLOR, roughness: 0.7, metalness: 0.2 });
   const positions = [
     [26, 7, REGION_Z - 62, 18, 14, 16],
     [-8, 4, REGION_Z - 70, 10, 8, 14],
   ];
-  positions.forEach(([x, y, z, w, h, d]) => {
+  positions.forEach(([x, y, z, w, h, d], i) => {
+    const material = baseMaterial.clone();
+    varyMaterial(material, 500 + i);
     const hub = new Mesh(new BoxGeometry(w, h, d), material);
     hub.position.set(x, y / 2, z);
     group.add(hub);
@@ -755,6 +770,40 @@ export class GroundEnvironment {
     this.targetFillColor = this.fillLight.color.clone();
 
     this.scene.add(this.group);
+
+    // Ground Chapter Cinematic Realism Pass, Commit 5: a self-contained
+    // hover micro-interaction, deliberately not routed through pointer.js/
+    // main.js's global CTA-hover mechanism -- Ground has no `cta` in
+    // config.js (only proofPoints), so that mechanism has nothing to
+    // attach to here, and widening it would ripple to every other
+    // chapter's proof-points. On hover, a small, capped, one-time nudge to
+    // targetActivityWeight (identical to the existing CTA-hover technique)
+    // -- which, via Commit 4's wiring, already brightens the dock/beacon/
+    // window lights. Camera/cursor response is intentionally not wired
+    // here (that's the CTA-hover mechanism's own job) -- a stated
+    // trade-off, not a silent gap.
+    this.proofPointsEl = document.querySelector('#scene-ground .scene__proof-points');
+    if (this.proofPointsEl) {
+      this.proofPointsEl.addEventListener(
+        'pointerenter',
+        (event) => {
+          if (!event.target.closest?.('li')) return;
+          this.targetActivityWeight = Math.min(1, this.targetActivityWeight * 1.05);
+        },
+        true
+      );
+    }
+
+    // Ground Chapter Cinematic Realism Pass, Commit 5: inert audio hook
+    // points -- no listener exists yet; a future audio layer would attach
+    // to these without any change to this file. Matches the codebase's
+    // existing CustomEvent convention (scene-state.js's own
+    // `scene:state-change`, nav.js's `transroyal:track-open`).
+    this.sectionEl = document.getElementById('scene-ground');
+  }
+
+  dispatchGroundEvent(name) {
+    this.sectionEl?.dispatchEvent(new CustomEvent(name));
   }
 
   update(time) {
@@ -830,6 +879,16 @@ export class GroundEnvironment {
     const cycleT = time.elapsed % DOCK_CYCLE_MS;
     const phase = phaseFor(cycleT);
     const motionT = dampFactor(DOCK_MOTION_HALF_LIFE_MS, time.delta);
+    const phaseChanged = phase !== this.dockCyclePhase;
+
+    // Commit 5: inert audio hook points, dispatched exactly at the phase
+    // boundaries a future audio layer would care about.
+    if (phaseChanged) {
+      if (phase === 'dockOpen' || phase === 'dockClose') this.dispatchGroundEvent('ground:dock-door');
+      if (phase === 'unload') this.dispatchGroundEvent('ground:forklift-move');
+      if (phase === 'dockClose') this.dispatchGroundEvent('ground:forklift-pause');
+      if (phase === 'gap') this.dispatchGroundEvent('ground:truck-idle');
+    }
 
     // Role swap -- once, exactly on entering 'arrive' (not 'depart': the
     // departing truck needs the whole depart+gap window to actually reach
@@ -843,7 +902,7 @@ export class GroundEnvironment {
     // dockTruck label, which is exactly it pulling up to the dock. Not a
     // new instantiation -- the same two rigs alternate roles every cycle
     // ("recycled from a small pool").
-    if (phase === 'arrive' && this.dockCyclePhase !== 'arrive') {
+    if (phase === 'arrive' && phaseChanged) {
       const previousDock = this.dockTruck;
       this.dockTruck = this.queuedTruck;
       this.queuedTruck = previousDock;
@@ -910,7 +969,15 @@ export class GroundEnvironment {
 
     // Reversing service vehicle -- a short, continuous reverse/return loop
     // on its own period, deliberately independent of the dock cycle above
-    // ("staggered timing," never one metronomic machine).
+    // ("staggered timing," never one metronomic machine). The sign of the
+    // motion's own analytic derivative (cosine) flips exactly at each
+    // direction reversal -- comparing it frame to frame is cheaper and
+    // more direct than tracking a position delta.
+    const serviceDirection = Math.sign(Math.cos(time.elapsed / 3300));
+    if (serviceDirection !== 0 && serviceDirection !== this.serviceVehicle.userData.lastDirection) {
+      this.dispatchGroundEvent('ground:vehicle-reverse');
+    }
+    this.serviceVehicle.userData.lastDirection = serviceDirection;
     this.serviceVehicle.position.x = this.serviceVehicle.userData.baseX + Math.sin(time.elapsed / 3300) * 4;
   }
 
