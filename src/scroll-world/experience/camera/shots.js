@@ -22,6 +22,27 @@
 // which stay exactly as specified regardless of drift.
 export const DEFAULT_DRIFT = { amplitude: 0.25, speed: 1, axis: { x: 1, y: 0.6, z: 0 } };
 
+// Cinematic Polish Phase, Commit 1: per-chapter target key/fill light tint,
+// crossfaded continuously by scene-blend.js as the visitor approaches or
+// leaves a chapter (Goal 6's "lighting evolves, never switches"). Values
+// are deliberately still within the brand's existing electric/royal-blue
+// family (createLights.js's own "two sources... never a third" doctrine is
+// a fixed identity constraint, not something this phase repaints) --
+// "sunrise/golden/sunset" is expressed as a subtle warm bias within that
+// family, "cool blue atmosphere" as a subtle cool bias, rather than a
+// literal orange-to-blue repaint. `air`'s tint intentionally matches its
+// own existing fog override color (0x4a63a8) for continuity between the
+// two already-related atmospheric properties.
+export const LIGHT_TINTS = {
+  origin: { key: 0x5a8fff, fill: 0x3a52c2 }, // warm sunrise
+  pickup: { key: 0x4fa3ff, fill: 0x2f4fc0 }, // bright morning
+  sorting: { key: 0x3f6fe0, fill: 0x2540b0 }, // industrial neutral
+  ground: { key: 0x5a8fe0, fill: 0x3654d6 }, // golden afternoon
+  air: { key: 0x4a63a8, fill: 0x2540b0 }, // cool blue atmosphere
+  'final-mile': { key: 0x4a7fe0, fill: 0x2f4fc0 }, // late-afternoon warmth
+  delivered: { key: 0x5a8fff, fill: 0x2f4fc0 }, // warm sunset, echoes origin
+};
+
 export const SHOTS = {
   origin: {
     // Section 23, Scene 01: "Elevated command-deck vantage... 35mm baseline,
@@ -34,6 +55,7 @@ export const SHOTS = {
     target: { x: -6, y: 0.6, z: -14 },
     // Calm opening beat -- slower and smaller than the default sway.
     drift: { amplitude: 0.12, speed: 0.7 },
+    environmentIntensity: 1,
   },
   pickup: {
     // Section 23, Scene 02: "Ground-adjacent elevated vantage, roughly 2.5
@@ -49,6 +71,7 @@ export const SHOTS = {
     far: 1000,
     position: { x: -14, y: 3.4, z: -68 },
     target: { x: 7, y: 1, z: -100 },
+    environmentIntensity: 0.9,
   },
   sorting: {
     // Section 23, Scene 03: "Elevated mezzanine vantage, roughly 3.5 meters,
@@ -58,6 +81,7 @@ export const SHOTS = {
     far: 1000,
     position: { x: -16, y: 4.6, z: -150 },
     target: { x: 6, y: 1.5, z: -205 },
+    environmentIntensity: 0.8,
   },
   ground: {
     // Section 23, Scene 04: "Full elevated establishing height, roughly 3.5
@@ -72,6 +96,7 @@ export const SHOTS = {
     far: 1000,
     position: { x: -26, y: 6.5, z: -225 },
     target: { x: 12, y: 1.5, z: -340 },
+    environmentIntensity: 1,
   },
   air: {
     // Section 23, Scene 05: "True aerial altitude, 60 meters equivalent or
@@ -92,6 +117,9 @@ export const SHOTS = {
     // The journey's most expansive beat -- larger, slightly quicker sway,
     // matching this shot's own already-larger scale.
     drift: { amplitude: 0.5, speed: 1.2 },
+    // True altitude, brightest open sky of the journey -- the strongest
+    // environment-reflection read of any chapter.
+    environmentIntensity: 1.5,
   },
   'final-mile': {
     // Section 23, Scene 06: "Elevated operational vantage, roughly 2.5-3
@@ -103,6 +131,7 @@ export const SHOTS = {
     far: 1000,
     position: { x: -14, y: 3.2, z: -673 },
     target: { x: 7, y: 1.3, z: -705 },
+    environmentIntensity: 0.9,
   },
   delivered: {
     // Section 23, Scene 07: "The lowest vantage in the entire journey, just
@@ -118,6 +147,8 @@ export const SHOTS = {
     // static... no residual drift" -- amplitude 0 makes that literal
     // rather than incidental.
     drift: { amplitude: 0 },
+    // Warm, settled resolution -- closes the loop toward origin's own tint.
+    environmentIntensity: 1.1,
   },
 };
 

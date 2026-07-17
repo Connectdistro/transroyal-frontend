@@ -22,3 +22,9 @@ export function dampFactor(halfLifeMs, deltaMs) {
 // environment may override `this.activityFloor` with its own literal.
 export const ACTIVITY_HALF_LIFE_MS = 500;
 export const DEFAULT_ACTIVITY_FLOOR = 0.75;
+
+// Cinematic Polish Phase, Commit 1: shared half-life for each region's
+// key/fill light-color crossfade (scene-blend.js's LIGHT_TINTS mechanism,
+// see each world/*Environment.js's setLightTint()). Same family as fog's
+// own 400ms so light and fog read as one coordinated transition.
+export const LIGHT_TINT_HALF_LIFE_MS = 400;

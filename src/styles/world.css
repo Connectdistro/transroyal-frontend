@@ -303,6 +303,16 @@
        is safe — unlike lighting/atmosphere above, nothing else claims it. */
     opacity: 1;
     transition: opacity 700ms var(--ease-standard);
+    /* Cinematic Polish Phase, Commit 1: continuous consumption of
+       scroll-world/scene-blend.js's --scene-blend corridor value (0 outside
+       a transition corridor, ramping toward 1 as a chapter boundary
+       approaches). Uses `filter: opacity()` — a different property than the
+       `opacity` this rule already owns above — so the two compose via the
+       browser's own compositing instead of fighting for the same property.
+       Defaults to 0 via the custom-property fallback, so any section
+       scene-blend.js hasn't reached yet renders at filter: opacity(100%), a
+       total no-op matching this file's pre-existing appearance. */
+    filter: opacity(calc(100% - var(--scene-blend, 0) * 12%));
   }
 
   /* ==========================================================================
@@ -823,6 +833,13 @@
 
     .scene[data-state] .scene__scrim {
       opacity: 1;
+      /* Cinematic Polish Phase, Commit 1: scene-blend.js's tick handler
+         goes still under reduced motion the same way every other tick
+         consumer does (Experience.js's existing reduced-motion loop
+         change), so --scene-blend simply stops advancing -- this is
+         cheap insurance matching the block's own "fully present
+         regardless of state" intent above, not a special case. */
+      filter: opacity(100%);
     }
   }
 }

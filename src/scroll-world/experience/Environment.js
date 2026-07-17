@@ -1,4 +1,4 @@
-import { Color, EquirectangularReflectionMapping, FogExp2, SRGBColorSpace } from 'three';
+import { Color, CubeUVReflectionMapping, EquirectangularReflectionMapping, FogExp2, SRGBColorSpace } from 'three';
 import { createBackgroundGradient } from './environment/background.js';
 import { dampFactor } from './utils/damp.js';
 
@@ -13,6 +13,12 @@ const DEFAULT_FOG_DENSITY = 0.012;
 // scene-transition system (~700ms), so fog and the DOM's own CSS fades read
 // as one coordinated transition rather than two independently-timed ones.
 const FOG_HALF_LIFE_MS = 400;
+
+// Cinematic Polish Phase, Commit 1: same half-life family as fog, so
+// environment-reflection intensity blends at a comparable pace during a
+// chapter transition -- see setEnvironmentIntensity()/update() below.
+const ENVIRONMENT_INTENSITY_HALF_LIFE_MS = 400;
+const DEFAULT_ENVIRONMENT_INTENSITY = 1;
 
 /** Manifest id for the world's single shared HDR (Production Handbook
  *  Section 8: every location shares one material/lighting language). Not a
@@ -34,6 +40,10 @@ export class Environment {
 
     this.setBackground();
     this.setFog();
+    this.setEnvironmentIntensity(DEFAULT_ENVIRONMENT_INTENSITY);
+    // Live value starts equal to the target so the first frame has nothing
+    // to blend from (matches setFog()'s own target-equals-live bootstrap).
+    this.scene.environmentIntensity = DEFAULT_ENVIRONMENT_INTENSITY;
     this.setEnvironmentMap();
   }
 
@@ -66,6 +76,16 @@ export class Environment {
     this.targetFogDensity = density;
   }
 
+  /** Sets the *target* environment-map reflection intensity (Cinematic
+   *  Polish Phase, Commit 1) -- update() eases `scene.environmentIntensity`
+   *  (a single global three.js scalar, no per-material loop needed) toward
+   *  it every frame, mirroring setFogDensity()'s exact target-and-ease
+   *  shape. Called by camera-sync.js on a chapter's 'active' transition,
+   *  and continuously by scene-blend.js during a transition corridor. */
+  setEnvironmentIntensity(value) {
+    this.targetEnvironmentIntensity = value;
+  }
+
   /** Restores the shared default fog (color and density both) -- called by
    *  camera-sync.js whenever the active chapter has no fog override of its
    *  own, so leaving a chapter that did override it always returns to the
@@ -86,6 +106,9 @@ export class Environment {
     const t = dampFactor(FOG_HALF_LIFE_MS, time.delta);
     this.fog.color.lerp(this.targetFogColor, t);
     this.fog.density += (this.targetFogDensity - this.fog.density) * t;
+
+    const envT = dampFactor(ENVIRONMENT_INTENSITY_HALF_LIFE_MS, time.delta);
+    this.scene.environmentIntensity += (this.targetEnvironmentIntensity - this.scene.environmentIntensity) * envT;
   }
 
   /** Resolves once Resources has either loaded the world HDR or confirmed no
@@ -97,8 +120,18 @@ export class Environment {
     const texture = await this.resources.load(id);
     if (!texture) return;
 
-    texture.mapping = EquirectangularReflectionMapping;
-    texture.colorSpace = SRGBColorSpace;
+    // A raw equirectangular HDR (the `hdr` loader) comes back needing both
+    // of these set explicitly before three.js can sample it as an env map.
+    // A generated PMREM env map (the `generatedEnvMap` loader, Cinematic
+    // Polish Phase) is already a fully prefiltered CubeUV texture with its
+    // own correct mapping/color handling baked in by PMREMGenerator --
+    // overwriting either here would corrupt it. Swapping the manifest entry
+    // from `generatedEnvMap` to a real `hdr` later needs no change here:
+    // this guard already does the right thing for either texture type.
+    if (texture.mapping !== CubeUVReflectionMapping) {
+      texture.mapping = EquirectangularReflectionMapping;
+      texture.colorSpace = SRGBColorSpace;
+    }
     this.scene.environment = texture;
   }
 }

@@ -4,7 +4,8 @@ import { createWalkway } from './createWalkway.js';
 import { createRouteLines } from './createRouteLines.js';
 import { createParticles, updateParticles } from './createParticles.js';
 import { createLights } from './createLights.js';
-import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR } from '../utils/damp.js';
+import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR, LIGHT_TINT_HALF_LIFE_MS } from '../utils/damp.js';
+import { LIGHT_TINTS } from '../camera/shots.js';
 
 const PULSE_PERIOD = 5200;
 const PULSE_DEPTH = 0.18;
@@ -47,6 +48,21 @@ export class OriginEnvironment {
     this.targetActivityWeight = 1;
     this.activityFloor = DEFAULT_ACTIVITY_FLOOR;
 
+    // Cinematic Polish Phase, Commit 1: this region's home light tint
+    // (scene-blend.js's LIGHT_TINTS, see shots.js) supersedes whatever
+    // hex createLights() above was given -- set once, immediately, before
+    // the first render, so it's indistinguishable from having been
+    // authored that way originally. targetKeyColor/targetFillColor are
+    // eased toward continuously in update(); scene-blend.js is the only
+    // caller of setLightTint(), driving them either back to this region's
+    // own tint (the common case) or toward a neighbor's during a
+    // transition corridor.
+    const tint = LIGHT_TINTS.origin;
+    this.keyLight.color.set(tint.key);
+    this.fillLight.color.set(tint.fill);
+    this.targetKeyColor = this.keyLight.color.clone();
+    this.targetFillColor = this.fillLight.color.clone();
+
     this.scene.add(
       this.floor,
       this.ribs,
@@ -66,6 +82,10 @@ export class OriginEnvironment {
     this.fillLight.intensity = this.baseFillIntensity * this.activityWeight;
     this.particles.material.opacity = this.baseParticleOpacity * this.activityWeight;
 
+    const tintT = dampFactor(LIGHT_TINT_HALF_LIFE_MS, time.delta);
+    this.keyLight.color.lerp(this.targetKeyColor, tintT);
+    this.fillLight.color.lerp(this.targetFillColor, tintT);
+
     updateParticles(this.particles, time.delta / 1000);
 
     const pulse = 1 - PULSE_DEPTH + PULSE_DEPTH * Math.sin((time.elapsed / PULSE_PERIOD) * Math.PI * 2);
@@ -83,5 +103,14 @@ export class OriginEnvironment {
    *  resolved number, only the state string. */
   setActivity(state) {
     this.targetActivityWeight = state === 'active' || state === 'entering' ? 1 : this.activityFloor;
+  }
+
+  /** Sets this region's target key/fill light color (Cinematic Polish
+   *  Phase, Commit 1) -- update() eases toward it every frame. Called only
+   *  by scene-blend.js, either with this region's own home tint or a
+   *  blend toward a neighbor's during a transition corridor. */
+  setLightTint(key, fill) {
+    this.targetKeyColor.set(key);
+    this.targetFillColor.set(fill);
   }
 }

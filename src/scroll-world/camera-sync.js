@@ -1,5 +1,10 @@
 import { SHOTS } from './experience/camera/shots.js';
 
+// Cinematic Polish Phase, Commit 1: fallback when a shot omits its own
+// `environmentIntensity` -- mirrors the fog block's own `?? default`
+// shape below.
+const DEFAULT_ENVIRONMENT_INTENSITY = 1;
+
 /**
  * The minimal Scroll Engine entry point (Production Handbook Section 16) --
  * maps a scene's lifecycle state (scene-state.js) onto the Production
@@ -55,6 +60,8 @@ export function mountCameraSync(worldRoot, experience) {
       } else {
         environment.resetFog();
       }
+
+      environment.setEnvironmentIntensity(SHOTS[sceneId]?.environmentIntensity ?? DEFAULT_ENVIRONMENT_INTENSITY);
     });
   });
 }

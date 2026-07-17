@@ -43,7 +43,12 @@ export class Resources extends EventEmitter {
     const loader = LOADERS[entry.type];
     if (!loader) return Promise.reject(new Error(`Unknown asset type: ${entry.type}`));
 
-    const promise = loader(entry.path)
+    // Cinematic Polish Phase: a second, optional context argument every
+    // existing loader (texture/cubeTexture/hdr/gltf/video) simply ignores
+    // -- only the `generatedEnvMap` loader reads it (it needs a live
+    // renderer, unlike the others' module-scope loader instances).
+    // Resources still dispatches purely on `entry.type`; no id-branching.
+    const promise = loader(entry.path, { renderer: this.experience.renderer, scene: this.experience.scene })
       .then((asset) => {
         this.items.set(id, asset);
         this.pending.delete(id);

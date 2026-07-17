@@ -10,7 +10,8 @@ import {
   Vector3,
 } from 'three';
 import { createLights } from './createLights.js';
-import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR } from '../utils/damp.js';
+import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR, LIGHT_TINT_HALF_LIFE_MS } from '../utils/damp.js';
+import { LIGHT_TINTS } from '../camera/shots.js';
 
 const LANDMASS_COLOR = 0x070b28;
 const BLOCK_COLOR = 0x0a1030;
@@ -142,6 +143,13 @@ export class AirEnvironment {
     this.targetActivityWeight = 1;
     this.activityFloor = DEFAULT_ACTIVITY_FLOOR;
 
+    // Cinematic Polish Phase, Commit 1: see OriginEnvironment.js.
+    const tint = LIGHT_TINTS.air;
+    this.keyLight.color.set(tint.key);
+    this.fillLight.color.set(tint.fill);
+    this.targetKeyColor = this.keyLight.color.clone();
+    this.targetFillColor = this.fillLight.color.clone();
+
     this.scene.add(this.group);
   }
 
@@ -149,6 +157,10 @@ export class AirEnvironment {
     this.activityWeight += (this.targetActivityWeight - this.activityWeight) * dampFactor(ACTIVITY_HALF_LIFE_MS, time.delta);
     this.keyLight.intensity = this.baseKeyIntensity * this.activityWeight;
     this.fillLight.intensity = this.baseFillIntensity * this.activityWeight;
+
+    const tintT = dampFactor(LIGHT_TINT_HALF_LIFE_MS, time.delta);
+    this.keyLight.color.lerp(this.targetKeyColor, tintT);
+    this.fillLight.color.lerp(this.targetFillColor, tintT);
 
     // Level-cruise light-trail motion and a near-imperceptible cloud drift
     // (Section 23) -- both far calmer than any ground-level chapter's motion.
@@ -164,5 +176,10 @@ export class AirEnvironment {
 
   setActivity(state) {
     this.targetActivityWeight = state === 'active' || state === 'entering' ? 1 : this.activityFloor;
+  }
+
+  setLightTint(key, fill) {
+    this.targetKeyColor.set(key);
+    this.targetFillColor.set(fill);
   }
 }

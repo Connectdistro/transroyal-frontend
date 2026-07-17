@@ -12,7 +12,8 @@ import {
 } from 'three';
 import { createLights } from './createLights.js';
 import { createParticles, updateParticles } from './createParticles.js';
-import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR } from '../utils/damp.js';
+import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR, LIGHT_TINT_HALF_LIFE_MS } from '../utils/damp.js';
+import { LIGHT_TINTS } from '../camera/shots.js';
 
 const ASPHALT_COLOR = 0x070a24;
 const HUB_COLOR = 0x0a1030;
@@ -198,6 +199,13 @@ export class GroundEnvironment {
     this.targetActivityWeight = 1;
     this.activityFloor = DEFAULT_ACTIVITY_FLOOR;
 
+    // Cinematic Polish Phase, Commit 1: see OriginEnvironment.js.
+    const tint = LIGHT_TINTS.ground;
+    this.keyLight.color.set(tint.key);
+    this.fillLight.color.set(tint.fill);
+    this.targetKeyColor = this.keyLight.color.clone();
+    this.targetFillColor = this.fillLight.color.clone();
+
     this.scene.add(this.group);
   }
 
@@ -206,6 +214,10 @@ export class GroundEnvironment {
     this.keyLight.intensity = this.baseKeyIntensity * this.activityWeight;
     this.fillLight.intensity = this.baseFillIntensity * this.activityWeight;
     this.particles.material.opacity = this.baseParticleOpacity * this.activityWeight;
+
+    const tintT = dampFactor(LIGHT_TINT_HALF_LIFE_MS, time.delta);
+    this.keyLight.color.lerp(this.targetKeyColor, tintT);
+    this.fillLight.color.lerp(this.targetFillColor, tintT);
 
     updateParticles(this.particles, time.delta / 1000);
 
@@ -223,5 +235,10 @@ export class GroundEnvironment {
 
   setActivity(state) {
     this.targetActivityWeight = state === 'active' || state === 'entering' ? 1 : this.activityFloor;
+  }
+
+  setLightTint(key, fill) {
+    this.targetKeyColor.set(key);
+    this.targetFillColor.set(fill);
   }
 }
