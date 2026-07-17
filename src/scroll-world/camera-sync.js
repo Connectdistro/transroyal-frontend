@@ -32,8 +32,18 @@ export function mountCameraSync(worldRoot, experience) {
 
   sections.forEach((el) => {
     el.addEventListener('scene:state-change', (event) => {
-      if (event.detail.state !== 'active') return;
       const sceneId = el.dataset.sceneId;
+
+      // Cinematic Integration Phase, Commit 1: pushes this section's
+      // lifecycle state into its matching region's own activity-weight
+      // easing (World.js's per-region setActivity(), see
+      // experience/world/*.js) -- runs on every state, not just 'active',
+      // since a region needs to know when it's *leaving* too. Independent
+      // of the shot/fog logic below, which keeps its own 'active'-only
+      // guard unchanged.
+      experience.world?.getRegion(sceneId)?.setActivity(event.detail.state);
+
+      if (event.detail.state !== 'active') return;
       experience.camera.setShot(sceneId, { instant: false });
 
       const fog = SHOTS[sceneId]?.fog;

@@ -10,6 +10,7 @@ import {
   Vector3,
 } from 'three';
 import { createLights } from './createLights.js';
+import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR } from '../utils/damp.js';
 
 const LANDMASS_COLOR = 0x070b28;
 const BLOCK_COLOR = 0x0a1030;
@@ -130,10 +131,25 @@ export class AirEnvironment {
     this.fillLight = fill;
     this.group.add(key, key.target, fill, fill.target);
 
+    // Cinematic Integration Phase, Commit 1: see OriginEnvironment.js. This
+    // chapter has no `this.particles` (clouds/light-trails instead), so its
+    // update() below skips the particle-opacity line entirely -- there's no
+    // `baseParticleOpacity` to read back.
+    this.id = 'air';
+    this.baseKeyIntensity = this.keyLight.intensity;
+    this.baseFillIntensity = this.fillLight.intensity;
+    this.activityWeight = 1;
+    this.targetActivityWeight = 1;
+    this.activityFloor = DEFAULT_ACTIVITY_FLOOR;
+
     this.scene.add(this.group);
   }
 
   update(time) {
+    this.activityWeight += (this.targetActivityWeight - this.activityWeight) * dampFactor(ACTIVITY_HALF_LIFE_MS, time.delta);
+    this.keyLight.intensity = this.baseKeyIntensity * this.activityWeight;
+    this.fillLight.intensity = this.baseFillIntensity * this.activityWeight;
+
     // Level-cruise light-trail motion and a near-imperceptible cloud drift
     // (Section 23) -- both far calmer than any ground-level chapter's motion.
     this.clouds.children.forEach((cloud, i) => {
@@ -144,5 +160,9 @@ export class AirEnvironment {
     this.lightTrails.userData.lines.forEach((line) => {
       line.material.opacity = line.material.userData.baseOpacity * pulse;
     });
+  }
+
+  setActivity(state) {
+    this.targetActivityWeight = state === 'active' || state === 'entering' ? 1 : this.activityFloor;
   }
 }

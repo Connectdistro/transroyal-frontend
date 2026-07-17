@@ -29,6 +29,16 @@ export class World {
   }
 
   update() {
+    this.environment.update(this.experience.time);
     this.regions.forEach((region) => region.update(this.experience.time));
+  }
+
+  /** Looks up a region by its scene id (Cinematic Integration Phase, Commit
+   *  1) -- e.g. camera-sync.js uses this to push activity-weight changes
+   *  into whichever region matches the DOM section that just changed
+   *  lifecycle state. Regions without an `id` (none, as of this phase --
+   *  every region sets one) simply never match. */
+  getRegion(id) {
+    return this.regions.find((region) => region.id === id);
   }
 }

@@ -12,6 +12,7 @@ import {
 } from 'three';
 import { createLights } from './createLights.js';
 import { createParticles, updateParticles } from './createParticles.js';
+import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR } from '../utils/damp.js';
 
 const ASPHALT_COLOR = 0x070a24;
 const HUB_COLOR = 0x0a1030;
@@ -188,10 +189,24 @@ export class GroundEnvironment {
     this.fillLight = fill;
     this.group.add(key, key.target, fill, fill.target);
 
+    // Cinematic Integration Phase, Commit 1: see OriginEnvironment.js.
+    this.id = 'ground';
+    this.baseKeyIntensity = this.keyLight.intensity;
+    this.baseFillIntensity = this.fillLight.intensity;
+    this.baseParticleOpacity = this.particles.material.opacity;
+    this.activityWeight = 1;
+    this.targetActivityWeight = 1;
+    this.activityFloor = DEFAULT_ACTIVITY_FLOOR;
+
     this.scene.add(this.group);
   }
 
   update(time) {
+    this.activityWeight += (this.targetActivityWeight - this.activityWeight) * dampFactor(ACTIVITY_HALF_LIFE_MS, time.delta);
+    this.keyLight.intensity = this.baseKeyIntensity * this.activityWeight;
+    this.fillLight.intensity = this.baseFillIntensity * this.activityWeight;
+    this.particles.material.opacity = this.baseParticleOpacity * this.activityWeight;
+
     updateParticles(this.particles, time.delta / 1000);
 
     const deltaSeconds = time.delta / 1000;
@@ -204,5 +219,9 @@ export class GroundEnvironment {
 
     const pulse = 1 - 0.2 + 0.2 * Math.sin(time.elapsed / 3800);
     this.routeLine.material.opacity = this.routeLine.material.userData.baseOpacity * pulse;
+  }
+
+  setActivity(state) {
+    this.targetActivityWeight = state === 'active' || state === 'entering' ? 1 : this.activityFloor;
   }
 }

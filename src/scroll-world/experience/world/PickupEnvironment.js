@@ -15,6 +15,7 @@ import {
 } from 'three';
 import { createLights } from './createLights.js';
 import { createParticles, updateParticles } from './createParticles.js';
+import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR } from '../utils/damp.js';
 
 const DOCK_COLOR = 0x080d33;
 const STRUCTURE_COLOR = 0x0a1030;
@@ -268,13 +269,34 @@ export class PickupEnvironment {
     this.fillLight = fill;
     this.group.add(key, key.target, fill, fill.target);
 
+    // Cinematic Integration Phase, Commit 1: see OriginEnvironment.js for
+    // the full rationale -- identical pattern, repeated per region rather
+    // than shared via a base class (no base class exists among these 7
+    // regions today).
+    this.id = 'pickup';
+    this.baseKeyIntensity = this.keyLight.intensity;
+    this.baseFillIntensity = this.fillLight.intensity;
+    this.baseParticleOpacity = this.particles.material.opacity;
+    this.activityWeight = 1;
+    this.targetActivityWeight = 1;
+    this.activityFloor = DEFAULT_ACTIVITY_FLOOR;
+
     this.scene.add(this.group);
   }
 
   update(time) {
+    this.activityWeight += (this.targetActivityWeight - this.activityWeight) * dampFactor(ACTIVITY_HALF_LIFE_MS, time.delta);
+    this.keyLight.intensity = this.baseKeyIntensity * this.activityWeight;
+    this.fillLight.intensity = this.baseFillIntensity * this.activityWeight;
+    this.particles.material.opacity = this.baseParticleOpacity * this.activityWeight;
+
     updateParticles(this.particles, time.delta / 1000);
 
     const pulse = 1 - PULSE_DEPTH + PULSE_DEPTH * Math.sin((time.elapsed / PULSE_PERIOD) * Math.PI * 2);
     this.routeLine.material.opacity = this.routeLine.material.userData.baseOpacity * pulse;
+  }
+
+  setActivity(state) {
+    this.targetActivityWeight = state === 'active' || state === 'entering' ? 1 : this.activityFloor;
   }
 }

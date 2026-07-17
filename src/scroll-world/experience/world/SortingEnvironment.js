@@ -11,6 +11,7 @@ import {
 } from 'three';
 import { createLights } from './createLights.js';
 import { createParticles, updateParticles } from './createParticles.js';
+import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR } from '../utils/damp.js';
 
 const STRUCTURE_COLOR = 0x0a1030;
 const FLOOR_COLOR = 0x080d33;
@@ -163,10 +164,24 @@ export class SortingEnvironment {
     this.fillLight = fill;
     this.group.add(key, key.target, fill, fill.target);
 
+    // Cinematic Integration Phase, Commit 1: see OriginEnvironment.js.
+    this.id = 'sorting';
+    this.baseKeyIntensity = this.keyLight.intensity;
+    this.baseFillIntensity = this.fillLight.intensity;
+    this.baseParticleOpacity = this.particles.material.opacity;
+    this.activityWeight = 1;
+    this.targetActivityWeight = 1;
+    this.activityFloor = DEFAULT_ACTIVITY_FLOOR;
+
     this.scene.add(this.group);
   }
 
   update(time) {
+    this.activityWeight += (this.targetActivityWeight - this.activityWeight) * dampFactor(ACTIVITY_HALF_LIFE_MS, time.delta);
+    this.keyLight.intensity = this.baseKeyIntensity * this.activityWeight;
+    this.fillLight.intensity = this.baseFillIntensity * this.activityWeight;
+    this.particles.material.opacity = this.baseParticleOpacity * this.activityWeight;
+
     updateParticles(this.particles, time.delta / 1000);
 
     const deltaSeconds = time.delta / 1000;
@@ -180,5 +195,9 @@ export class SortingEnvironment {
     this.arches.userData.glowMeshes.forEach((glow, i) => {
       glow.scale.y = 0.7 + 0.3 * Math.sin(time.elapsed / PULSE_PERIOD + i);
     });
+  }
+
+  setActivity(state) {
+    this.targetActivityWeight = state === 'active' || state === 'entering' ? 1 : this.activityFloor;
   }
 }
