@@ -52,6 +52,31 @@ const DESTINATION_ARRIVAL_THRESHOLD = 0.97;
 const DESTINATION_ARRIVAL_BOOST = 2.6;
 const DESTINATION_BOOST_HALF_LIFE_MS = 600;
 
+// Flight motion (Commit 3): a single eased speed (progress-units/second)
+// chases a target that tapers near both ends of the curve -- accelerating
+// off P0, holding cruise through the middle, decelerating into the
+// approach -- the same taper-by-proximity-to-boundary technique Ground's
+// truck/parcel velocity system already uses, applied to a 0-1 curve
+// parameter instead of world-space Z.
+const FLIGHT_CRUISE_SPEED = 1 / 34;
+const FLIGHT_TAPER_DISTANCE = 0.14;
+const FLIGHT_MIN_TAPER = 0.06;
+const FLIGHT_VELOCITY_HALF_LIFE_MS = 900;
+const FLIGHT_LOOK_AHEAD = 0.01;
+const FLIGHT_BANK_LOOK_AHEAD = 0.02;
+const FLIGHT_MAX_BANK = (22 * Math.PI) / 180;
+const FLIGHT_BANK_GAIN = 60;
+
+// Module-scope scratch vectors, reused every frame (never reallocated) as
+// `optionalTarget` args to Curve.getPointAt()/getTangentAt() -- Goal 9's
+// zero-per-frame-allocation rule.
+const scratchPosition = new Vector3();
+const scratchLookAt = new Vector3();
+const scratchTangentNow = new Vector3();
+const scratchTangentAhead = new Vector3();
+const scratchRight = new Vector3();
+const scratchHeadingDelta = new Vector3();
+
 function createLandmass() {
   const group = new Group();
   const plane = new Mesh(
@@ -324,16 +349,15 @@ export class AirEnvironment {
 
     // Commit 2: the progressive delivery thread and destination marker,
     // both built from this.flightPath -- the same curve instance, never a
-    // duplicate. flightProgress is a placeholder linear advance here purely
-    // to exercise the setDrawRange/brightness-ramp mechanisms end-to-end;
-    // Commit 3 replaces the advance itself with the real eased,
-    // curve-sampled flight motion (this field and everything that reads it
-    // stays the same).
+    // duplicate. Commit 3 drives flightProgress via an eased, tapered speed
+    // (this.flightSpeed) and samples the curve fresh each frame for the
+    // aircraft's own position/orientation/banking.
     this.deliveryThread = createDeliveryThread(this.flightPath);
     this.group.add(this.deliveryThread.group);
     this.destinationMarker = createDestinationMarker(this.flightPath.getPointAt(1));
     this.group.add(this.destinationMarker.group);
     this.flightProgress = 0;
+    this.flightSpeed = 0;
     this.destinationBoost = 1;
 
     // Section 23: key electric blue, fill constant royal blue, "both read at
@@ -383,8 +407,13 @@ export class AirEnvironment {
 
     // Level-cruise light-trail motion and a near-imperceptible cloud drift
     // (Section 23) -- both far calmer than any ground-level chapter's motion.
+    // Commit 3: a small progress-linked bias added on top -- clouds nearer
+    // the aircraft's current z read as gently reactive to it passing by,
+    // reusing the existing per-cloud sine rather than adding a new system.
+    const aircraftZ = this.aircraft.position.z;
     this.clouds.children.forEach((cloud, i) => {
-      cloud.position.x += Math.sin(time.elapsed / 9000 + i) * 0.002;
+      const proximity = Math.max(0, 1 - Math.abs(cloud.position.z - aircraftZ) / 120);
+      cloud.position.x += Math.sin(time.elapsed / 9000 + i) * 0.002 + proximity * 0.0015;
     });
 
     const pulse = 0.85 + 0.15 * Math.sin(time.elapsed / PULSE_PERIOD);
@@ -392,12 +421,48 @@ export class AirEnvironment {
       line.material.opacity = line.material.userData.baseOpacity * pulse;
     });
 
-    // Commit 2 placeholder: linear advance only, purely to exercise the
-    // delivery-thread reveal and destination-marker ramp end-to-end.
-    // Commit 3 replaces this one line with the real eased, curve-sampled
-    // flight motion -- flightProgress itself, and everything below that
-    // reads it, is already the real mechanism.
-    this.flightProgress = (this.flightProgress + time.delta * 0.00004) % 1;
+    // Commit 3: eased speed chases a target that tapers near both curve
+    // ends (accelerate off P0, cruise, decelerate into approach), then
+    // advances flightProgress -- replaces Commit 2's placeholder linear
+    // advance; everything downstream (thread reveal, destination ramp)
+    // already reads flightProgress and is unchanged.
+    const deltaSeconds = time.delta / 1000;
+    const taperToEnd = Math.max(FLIGHT_MIN_TAPER, Math.min(1, (1 - this.flightProgress) / FLIGHT_TAPER_DISTANCE));
+    const taperFromStart = Math.max(FLIGHT_MIN_TAPER, Math.min(1, this.flightProgress / FLIGHT_TAPER_DISTANCE));
+    const desiredSpeed = FLIGHT_CRUISE_SPEED * Math.min(taperToEnd, taperFromStart);
+    this.flightSpeed += (desiredSpeed - this.flightSpeed) * dampFactor(FLIGHT_VELOCITY_HALF_LIFE_MS, time.delta);
+    this.flightProgress = (this.flightProgress + this.flightSpeed * deltaSeconds) % 1;
+
+    // Position and orientation, sampled fresh from the curve every frame --
+    // smooth by construction (no snapping), constant forward orientation,
+    // and arc-length parameterized so motion speed reads evenly along the
+    // visually curved path rather than just parametrically.
+    this.flightPath.getPointAt(this.flightProgress, scratchPosition);
+    this.aircraft.position.copy(scratchPosition);
+    this.flightPath.getTangentAt(Math.min(1, this.flightProgress + FLIGHT_LOOK_AHEAD), scratchLookAt);
+    scratchLookAt.add(scratchPosition);
+    this.aircraft.lookAt(scratchLookAt);
+
+    // Banking: compare the tangent at the current progress against a small
+    // step ahead, project the heading change onto the aircraft's own local
+    // right vector (post-lookAt), scale and clamp -- a cheap, standard
+    // banked-turn approximation layered on top via a local-space roll.
+    this.flightPath.getTangentAt(this.flightProgress, scratchTangentNow);
+    this.flightPath.getTangentAt(Math.min(1, this.flightProgress + FLIGHT_BANK_LOOK_AHEAD), scratchTangentAhead);
+    scratchHeadingDelta.copy(scratchTangentAhead).sub(scratchTangentNow);
+    scratchRight.set(1, 0, 0).applyQuaternion(this.aircraft.quaternion);
+    const bankSignal = scratchHeadingDelta.dot(scratchRight) * FLIGHT_BANK_GAIN;
+    const bankAngle = Math.max(-FLIGHT_MAX_BANK, Math.min(FLIGHT_MAX_BANK, bankSignal));
+    this.aircraft.rotateZ(-bankAngle);
+
+    // Lightweight atmosphere: sub-degree wingtip flex and pitch/roll jitter
+    // read as engine vibration, recomputed fresh each frame on top of the
+    // curve-driven base orientation above (never accumulated frame to
+    // frame, so there's no drift).
+    const wings = this.aircraft.userData.wings;
+    if (wings) wings.rotation.z = Math.sin(time.elapsed / 260) * 0.01;
+    this.aircraft.rotateX(Math.sin(time.elapsed / 340 + 2) * 0.0015);
+    this.aircraft.rotateZ(Math.sin(time.elapsed / 410 + 4) * 0.001);
 
     const revealIndices = Math.floor(
       (this.deliveryThread.indexCount * this.flightProgress) / THREAD_INDICES_PER_RING
