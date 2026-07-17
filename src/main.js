@@ -13,6 +13,7 @@ import { mountWorldCanvas } from './scroll-world/world-canvas.js';
 import { mountSceneState } from './scroll-world/scene-state.js';
 import { mountCameraSync } from './scroll-world/camera-sync.js';
 import { mountScenePreload } from './scroll-world/scene-preload.js';
+import { mountScrollNav } from './scroll-world/scroll-nav.js';
 import { mountNav } from './components/nav.js';
 import { mountTrackingPanel } from './components/tracking-panel.js';
 import { mountRouteRail } from './components/route-rail.js';
@@ -209,6 +210,7 @@ const experience = mountWorldCanvas(document.querySelector('#world-canvas-root')
 // Dev-only hook for scripts/snap-scene.cjs (screenshot-based scene QA) --
 // statically eliminated from production builds by Vite's import.meta.env.DEV.
 if (import.meta.env.DEV) window.__experience = experience;
+mountScrollNav(document.body);
 mountNav(document.querySelector('#nav-root'));
 mountTrackingPanel(document.querySelector('#tracking-root'));
 mountRouteRail(document.querySelector('#route-rail-root'), {
