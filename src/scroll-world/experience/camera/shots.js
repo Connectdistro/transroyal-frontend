@@ -8,6 +8,20 @@
 // `position`/`target` (world-space meters) -- the camera's eye and the point
 // it looks at, kept as separate authored values per the rig's position/target
 // split.
+// Cinematic Integration Phase, Commit 4: the intra-chapter drift/parallax
+// every shot gets by default (CameraRig.js resolves this once per shot
+// change, merging any per-shot `drift` override over these fields
+// individually -- a shot may override just `amplitude` and still inherit
+// the default `speed`/`axis`). `amplitude` is in world units (this scene's
+// human scale runs close to meters -- see delivered's camera `y: 1.9`
+// below); `speed` is a multiplier on CameraRig's own oscillation period;
+// `axis` is a direction (normalized by CameraRig, not here) the sway
+// travels along -- biased slightly more horizontal than vertical by
+// default. Applied only to the live camera position (see CameraRig.js),
+// never to `shots.js`'s own authored position/target/fov values below,
+// which stay exactly as specified regardless of drift.
+export const DEFAULT_DRIFT = { amplitude: 0.25, speed: 1, axis: { x: 1, y: 0.6, z: 0 } };
+
 export const SHOTS = {
   origin: {
     // Section 23, Scene 01: "Elevated command-deck vantage... 35mm baseline,
@@ -18,6 +32,8 @@ export const SHOTS = {
     far: 1000,
     position: { x: 4.2, y: 4, z: 19 },
     target: { x: -6, y: 0.6, z: -14 },
+    // Calm opening beat -- slower and smaller than the default sway.
+    drift: { amplitude: 0.12, speed: 0.7 },
   },
   pickup: {
     // Section 23, Scene 02: "Ground-adjacent elevated vantage, roughly 2.5
@@ -73,6 +89,9 @@ export const SHOTS = {
     // and less dense here reads as true-altitude haze instead of a solid
     // wash -- restored to the shared default by camera-sync.js on leaving.
     fog: { color: 0x4a63a8, density: 0.006 },
+    // The journey's most expansive beat -- larger, slightly quicker sway,
+    // matching this shot's own already-larger scale.
+    drift: { amplitude: 0.5, speed: 1.2 },
   },
   'final-mile': {
     // Section 23, Scene 06: "Elevated operational vantage, roughly 2.5-3
@@ -95,6 +114,10 @@ export const SHOTS = {
     far: 1000,
     position: { x: -6, y: 1.9, z: -782 },
     target: { x: 4, y: 1.9, z: -806 },
+    // This shot's own framing above already calls for "held perfectly
+    // static... no residual drift" -- amplitude 0 makes that literal
+    // rather than incidental.
+    drift: { amplitude: 0 },
   },
 };
 

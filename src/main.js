@@ -12,6 +12,7 @@ import { MOBILE_MEDIA_QUERY } from './scroll-world/breakpoints.js';
 import { mountWorldCanvas } from './scroll-world/world-canvas.js';
 import { mountSceneState } from './scroll-world/scene-state.js';
 import { mountCameraSync } from './scroll-world/camera-sync.js';
+import { mountScrollProgress } from './scroll-world/scroll-progress.js';
 import { mountScenePreload } from './scroll-world/scene-preload.js';
 import { mountScrollNav } from './scroll-world/scroll-nav.js';
 import { mountNav } from './components/nav.js';
@@ -223,5 +224,6 @@ mountRouteRail(document.querySelector('#route-rail-root'), {
 });
 mountSceneState(document.querySelector('#world'));
 mountCameraSync(document.querySelector('#world'), experience);
+mountScrollProgress(document.querySelector('#world'), experience);
 mountScenePreload(document.querySelector('#world'));
 mountFooter(document.querySelector('#footer-root'));

@@ -1,22 +1,47 @@
 import { PerspectiveCamera, Vector3 } from 'three';
-import { SHOTS, DEFAULT_SHOT_ID } from './shots.js';
+import { SHOTS, DEFAULT_SHOT_ID, DEFAULT_DRIFT } from './shots.js';
+import { dampFactor } from '../utils/damp.js';
 
 // How quickly the live position/target/fov ease toward their desired values
-// each frame (Section 11: camera movement is "slow, continuous, and
-// legible"). Every setShot() call today is instant (see below), which snaps
-// desired and live values together on arrival -- so this damping only comes
-// into play once a future milestone starts moving the desired values over
-// time (a scroll-driven setShot(..., { instant: false }) or a GSAP tween).
-// Nothing animates yet.
-const DAMPING = 0.08;
+// (Section 11: camera movement is "slow, continuous, and legible"). A
+// half-life, not a fixed per-tick factor (Cinematic Integration Phase,
+// Commit 4) -- dampFactor() converges at the same *rate* regardless of the
+// interval between frames, so easing speed no longer silently varies with
+// display refresh rate. 140ms matches the feel of the original fixed 0.08
+// factor at an implicit ~60fps baseline: solving `1 - 2^(-16.67/h) = 0.08`
+// for h.
+const POSITION_HALF_LIFE_MS = 140;
+
+// Intra-chapter drift/parallax (Commit 4b) -- a bounded, self-canceling sway
+// layered on top of the shot-easing above, activated via setProgress() (see
+// its own doc below). The oscillation period a shot's own `drift.speed`
+// multiplies against.
+const DRIFT_PERIOD_MS = 5000;
+
+/** Merges a shot's optional `drift` fields over DEFAULT_DRIFT (per-field,
+ *  not all-or-nothing) and normalizes `axis` to a unit Vector3 once --
+ *  called from setShot(), not every frame, since a shot's drift config
+ *  only changes when the shot itself changes. */
+function resolveDrift(drift) {
+  const amplitude = drift?.amplitude ?? DEFAULT_DRIFT.amplitude;
+  const speed = drift?.speed ?? DEFAULT_DRIFT.speed;
+  const axis = drift?.axis ?? DEFAULT_DRIFT.axis;
+  const axisVector = new Vector3(axis.x, axis.y, axis.z ?? 0);
+  if (axisVector.lengthSq() > 0) axisVector.normalize();
+  return { amplitude, speed, axisVector };
+}
 
 /**
  * The Production Camera (Handbook Section 11) -- a single rig shared by the
- * entire seven-chapter journey. It never branches on scene id: a caller hands
- * it a shot id (Section 23's per-chapter framing, authored in shots.js) and
- * the rig eases its live position/target/fov toward that shot. No scene ever
- * reaches into `instance.position` or calls `instance.lookAt()` directly --
- * that stays entirely inside this file.
+ * entire seven-chapter journey, and the ONLY class allowed to mutate the
+ * camera transform (Cinematic Integration Phase architectural rule). Every
+ * other module that influences the camera (camera-sync.js, scroll-progress.js)
+ * only ever calls a semantic method here (`setShot`, `setProgress`) and
+ * hands it data -- none of them reach into `instance.position`/`target`
+ * themselves. It never branches on scene id: a caller hands it a shot id
+ * (Section 23's per-chapter framing, authored in shots.js) and the rig
+ * eases its live position/target/fov toward that shot, plus a small,
+ * bounded, per-shot-configurable drift once mid-chapter (see update()).
  *
  * Position and target are tracked as plain Vector3s (`desiredPosition`,
  * `desiredTarget`) separate from Three's own camera transform, specifically
@@ -24,12 +49,13 @@ const DAMPING = 0.08;
  * `gsap.to(rig.desiredPosition, { x, y, z, duration })` -- without reaching
  * into rig internals or Three's camera API at all.
  *
- * `setProgress()` reserves the entry point the Scroll Engine (Section 16)
- * will call once later chapters exist to map scroll position onto camera
- * motion. It stores the value today and nothing else -- no shot mapping, no
- * animation. There is no OrbitControls and no debug rig anywhere in this
- * class; the scroll engine is the only intended future authority over camera
- * position (Section 16).
+ * `setProgress()` is the Scroll Engine's (Section 16) entry point, now live
+ * (Commit 4b): scroll-progress.js calls it with a 0-1 value representing how
+ * far scrolled through the *currently active* chapter, and update() uses it
+ * to shape the drift envelope below -- exactly 0 at a chapter's own start/
+ * end, so it never interferes with the shot-to-shot easing that owns chapter
+ * boundaries. There is no OrbitControls and no debug rig anywhere in this
+ * class.
  */
 export class CameraRig {
   constructor(experience) {
@@ -53,6 +79,7 @@ export class CameraRig {
 
     this.progress = 0;
     this.activeShotId = null;
+    this.activeDrift = resolveDrift(undefined);
 
     this.setShot(DEFAULT_SHOT_ID);
   }
@@ -73,6 +100,8 @@ export class CameraRig {
     this.desiredPosition.set(shot.position.x, shot.position.y, shot.position.z);
     this.desiredTarget.set(shot.target.x, shot.target.y, shot.target.z);
     this.desiredFov = shot.fov;
+    // Resolved once per shot change, not per frame -- see resolveDrift().
+    this.activeDrift = resolveDrift(shot.drift);
 
     // Clip planes are a technical bound, not a cinematic parameter -- they
     // apply immediately regardless of `instant`, never eased like fov.
@@ -95,10 +124,13 @@ export class CameraRig {
   }
 
   /**
-   * Reserved entry point for the Scroll Engine (Section 16): stores scroll
-   * progress (0 at Origin's opening frame, 1 at Delivered's closing frame)
-   * for a future milestone to map onto shot interpolation. No camera motion
-   * results from this call today -- it only records the value.
+   * The Scroll Engine's (Section 16) entry point, live since Commit 4b:
+   * `progress` is how far scrolled through the *currently active* chapter
+   * (0 at that chapter's own opening frame, 1 at its closing frame) --
+   * called every tick by scroll-progress.js, which only ever computes this
+   * number and hands it here; it never touches the camera transform itself
+   * (the ownership rule in this file's class doc). update() shapes this
+   * into the drift envelope below.
    */
   setProgress(progress) {
     this.progress = Math.min(1, Math.max(0, progress));
@@ -116,13 +148,30 @@ export class CameraRig {
 
   /** Camera update loop: called once per tick, ahead of the renderer, from
    *  Experience.update(). Eases live position/target/fov toward their
-   *  desired values and re-applies lookAt every frame -- always, not only
-   *  when a shot changes -- so a future scroll-driven desired-value change
-   *  is picked up automatically with no extra wiring. */
+   *  desired values (frame-rate-independent since Commit 4a) and re-applies
+   *  lookAt every frame -- always, not only when a shot changes -- so a
+   *  scroll-driven desired-value change is picked up automatically with no
+   *  extra wiring. Layers a small intra-chapter drift on top (Commit 4b)
+   *  after the shot-easing lerp, so drift can never alter which shot the
+   *  camera is easing toward or its resting composition. */
   update() {
-    this.instance.position.lerp(this.desiredPosition, DAMPING);
-    this.target.lerp(this.desiredTarget, DAMPING);
-    this.setFov(this.instance.fov + (this.desiredFov - this.instance.fov) * DAMPING);
+    const dt = this.experience.time.delta;
+    const t = dampFactor(POSITION_HALF_LIFE_MS, dt);
+    this.instance.position.lerp(this.desiredPosition, t);
+    this.target.lerp(this.desiredTarget, t);
+    this.setFov(this.instance.fov + (this.desiredFov - this.instance.fov) * t);
+
+    // Exactly 0 at this chapter's own start/end (`progress` 0 or 1), so it
+    // never interferes with the shot-to-shot easing above -- drift only
+    // "wakes up" once settled mid-chapter and fades out before the next
+    // boundary, regardless of the active shot's configured amplitude/speed/
+    // axis. `target` is left undrifted, so this reads as a subtle handheld
+    // sway around a stable subject, not a moving frame.
+    const envelope = Math.sin(this.progress * Math.PI);
+    const oscillation = Math.sin((this.experience.time.elapsed / DRIFT_PERIOD_MS) * this.activeDrift.speed * Math.PI * 2);
+    const offset = this.activeDrift.amplitude * envelope * oscillation;
+    this.instance.position.addScaledVector(this.activeDrift.axisVector, offset);
+
     this.applyLookAt();
   }
 
