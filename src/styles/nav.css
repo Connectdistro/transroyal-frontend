@@ -1,11 +1,9 @@
 @layer layout {
-  /* Rebuilt against the approved design reference (reference/*.png): a
-     floating architectural element, not a website header. No horizontal
-     link row at any width -- see the class doc in nav.js. Stays fully
-     transparent at rest; nav.js toggles `.nav--elevated` once the visitor
-     scrolls past the opening frame, at which point the faintest possible
-     backdrop fades in for legibility, never a panel competing with the
-     world behind it. */
+  /* A floating architectural element, not a website header. No horizontal
+     link row at any width -- see the class doc in nav.js. Permanently
+     transparent, no background at any scroll position -- unlike the side
+     rail (route-rail.css), the top bar itself never hides or gains a
+     backdrop; it stays available for every chapter including Origin. */
   .nav {
     position: fixed;
     inset-inline: 0;
@@ -14,17 +12,6 @@
     padding-top: var(--safe-top);
     background: transparent;
     border-bottom: 1px solid transparent;
-    transition:
-      background var(--duration-slow) var(--ease-standard),
-      border-color var(--duration-slow) var(--ease-standard),
-      backdrop-filter var(--duration-slow) var(--ease-standard);
-  }
-
-  .nav--elevated {
-    background: rgb(5 8 31 / 20%);
-    backdrop-filter: blur(20px) saturate(140%);
-    -webkit-backdrop-filter: blur(20px) saturate(140%);
-    border-bottom-color: rgb(255 255 255 / 5%);
   }
 
   .nav__bar {
@@ -192,8 +179,8 @@
     inset: 0;
     z-index: -1;
     display: flex;
-    align-items: flex-end;
-    padding: 0 20px max(48px, var(--safe-bottom));
+    align-items: flex-start;
+    padding: var(--menu-top-offset) 20px max(48px, var(--safe-bottom));
     background: rgb(5 8 31 / 94%);
     backdrop-filter: blur(32px) saturate(140%);
     -webkit-backdrop-filter: blur(32px) saturate(140%);
@@ -212,23 +199,36 @@
     }
 
     @media (min-width: 640px) {
-      padding: 0 32px max(56px, var(--safe-bottom));
+      padding: var(--menu-top-offset) 32px max(56px, var(--safe-bottom));
     }
 
     @media (min-width: 1024px) {
-      padding: 0 64px max(72px, var(--safe-bottom));
+      padding: var(--menu-top-offset) 64px max(72px, var(--safe-bottom));
     }
 
     @media (min-width: 1440px) {
-      padding: 0 96px max(88px, var(--safe-bottom));
+      padding: var(--menu-top-offset) 96px max(88px, var(--safe-bottom));
     }
   }
 
+  /* Two-column layout -- a muted "The Journey" column beside a headline-
+     scale "Get Started" column, mirroring the reference's own open-menu
+     structure exactly (reference/Screenshot 2026-07-16 173302.png) and the
+     same visual treatment footer.css gives its own two zones. */
   .nav__menu-inner {
     width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 48px;
+
+    @media (min-width: 640px) {
+      flex-direction: row;
+      gap: var(--menu-col-gap);
+      padding-inline-start: var(--menu-indent);
+    }
   }
 
-  .nav__menu-eyebrow {
+  .nav__menu-label {
     margin: 0 0 20px;
     color: var(--accent-strong);
     font-size: var(--text-xs);
@@ -242,92 +242,83 @@
       transform var(--duration-slow) var(--ease-standard);
   }
 
-  .nav__menu.is-open .nav__menu-eyebrow {
+  .nav__menu.is-open .nav__menu-label {
     opacity: 1;
     transform: translateY(0);
   }
 
-  .nav__menu-links {
+  .nav__menu-col ul {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-
-    li {
-      opacity: 0;
-      transform: translateY(18px);
-      transition:
-        opacity var(--duration-slow) var(--ease-standard),
-        transform var(--duration-slow) var(--ease-standard);
-      transition-delay: calc((var(--link-index, 0) * 60ms) + 60ms);
-    }
-
-    a {
-      display: inline-flex;
-      padding: 10px 0;
-      min-height: 44px;
-      align-items: center;
-      font-size: clamp(2.25rem, 4vw + 1.2rem, 5.25rem);
-      font-weight: 300;
-      letter-spacing: -0.02em;
-      line-height: 1.1;
-      color: var(--white);
-      text-decoration: none;
-      transition: color var(--duration-base) var(--ease-standard);
-
-      &:hover {
-        color: var(--accent-strong);
-      }
-
-      &:active {
-        opacity: 0.7;
-      }
-    }
   }
 
-  .nav__menu-track {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 32px;
-    background: transparent;
-    border: none;
-    padding: 10px 0;
-    color: var(--accent-strong);
-    font-size: var(--text-sm);
-    font-weight: 500;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    cursor: pointer;
+  .nav__menu-col li {
     opacity: 0;
     transform: translateY(18px);
     transition:
       opacity var(--duration-slow) var(--ease-standard),
-      transform var(--duration-slow) var(--ease-standard),
-      color var(--duration-base) var(--ease-standard);
+      transform var(--duration-slow) var(--ease-standard);
     transition-delay: calc((var(--link-index, 0) * 60ms) + 60ms);
-
-    svg {
-      transition: transform var(--duration-base) var(--ease-standard);
-    }
-
-    &:hover {
-      color: var(--white);
-
-      svg {
-        transform: translateX(3px);
-      }
-    }
   }
 
-  .nav__menu.is-open .nav__menu-links li,
-  .nav__menu.is-open .nav__menu-track {
+  .nav__menu.is-open .nav__menu-col li {
     opacity: 1;
     transform: translateY(0);
   }
 
+  .nav__menu-col a,
+  .nav__menu-col button {
+    display: inline-flex;
+    width: fit-content;
+    background: none;
+    border: none;
+    margin: 0;
+    padding: 0;
+    font-family: inherit;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    transition: color var(--duration-base) var(--ease-standard);
+
+    &:active {
+      opacity: 0.7;
+    }
+  }
+
+  /* The muted column -- small and quiet, the supporting role. */
+  .nav__menu-col--journey a {
+    padding: 6px 0;
+    min-height: 44px;
+    align-items: center;
+    font-size: var(--text-sm);
+    font-weight: 400;
+    color: var(--text-dim);
+
+    &:hover {
+      color: var(--text-muted);
+    }
+  }
+
+  /* The primary column -- headline-scale, the same weight a hero title
+     carries (Addendum 32.2: hierarchy from scale and isolation, not
+     boldness). */
+  .nav__menu-col--primary a,
+  .nav__menu-col--primary button {
+    padding: 8px 0;
+    font-size: clamp(2rem, 3.5vw + 1rem, 4.5rem);
+    font-weight: 300;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    color: var(--white);
+
+    &:hover {
+      color: var(--accent-strong);
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    .nav__menu-links li,
-    .nav__menu-track {
+    .nav__menu-label,
+    .nav__menu-col li {
       transition-delay: 0ms;
     }
   }

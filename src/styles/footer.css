@@ -31,7 +31,8 @@
 
     @media (min-width: 900px) {
       flex-direction: row;
-      gap: 96px;
+      gap: var(--menu-col-gap);
+      padding-inline-start: var(--menu-indent);
     }
   }
 

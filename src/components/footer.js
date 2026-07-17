@@ -1,21 +1,4 @@
-import { SCENES } from '../scroll-world/config.js';
-
-// The muted, in-page column -- mirrors the reference's small "Homepage"
-// anchor list. Reuses the seven-chapter journey directly from config.js
-// rather than duplicating scene labels/ids.
-const JOURNEY_LINKS = SCENES.map((scene) => ({ label: scene.label, href: `#scene-${scene.id}` }));
-
-// The editorial-scale column -- the site's only three real destinations
-// beyond the journey itself. Deliberately short: the previous version
-// listed five additional placeholder items (Warehousing, Careers,
-// Newsroom, Help Center, Claims) with no real destination. The reference's
-// equivalent column is exclusively real, functioning pages, so those are
-// dropped here rather than carried forward as unstyled non-links.
-const PRIMARY_LINKS = [
-  { label: 'Services', href: '#scene-pickup' },
-  { label: 'Track Shipment', action: 'track' },
-  { label: 'Contact', href: '#contact' },
-];
+import { JOURNEY_LINKS, PRIMARY_LINKS } from '../content/site-links.js';
 
 // No real legal pages exist yet -- renderLink's fallback (a non-focusable
 // <span>) applies here exactly as it did before this rebuild.

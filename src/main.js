@@ -213,6 +213,11 @@ mountNav(document.querySelector('#nav-root'));
 mountTrackingPanel(document.querySelector('#tracking-root'));
 mountRouteRail(document.querySelector('#route-rail-root'), {
   worldRoot: document.querySelector('#world'),
+  // #footer-root always exists in the static shell above, before
+  // mountFooter populates it, so observing it here is safe regardless of
+  // mount order -- its size simply tracks whatever mountFooter renders
+  // into it.
+  footerEl: document.querySelector('#footer-root'),
 });
 mountSceneState(document.querySelector('#world'));
 mountCameraSync(document.querySelector('#world'), experience);

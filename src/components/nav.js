@@ -1,14 +1,19 @@
-const NAV_LINKS = [
-  { href: '#scene-ground', label: 'Services' },
-  { href: '#scene-air', label: 'Network' },
-  { href: '#scene-origin', label: 'Journey' },
-  { href: '#contact', label: 'Contact' },
-];
+import { JOURNEY_LINKS, PRIMARY_LINKS } from '../content/site-links.js';
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
 
-const SCROLL_ELEVATE_THRESHOLD = 40;
+/**
+ * `action: 'track'` -> a real button dispatching the same track-open event
+ * as the bar's own Track Shipment action; `href` -> a real anchor.
+ * `--link-index` drives each item's staggered reveal delay (nav.css).
+ */
+function renderMenuLink({ label, href, action }, index) {
+  if (action === 'track') {
+    return `<li style="--link-index:${index}"><button type="button" data-nav-track>${label}</button></li>`;
+  }
+  return `<li style="--link-index:${index}"><a href="${href}">${label}</a></li>`;
+}
 
 /**
  * Mounts the persistent primary navigation. Rebuilt from first principles
@@ -19,6 +24,12 @@ const SCROLL_ELEVATE_THRESHOLD = 40;
  * the single full-screen overlay this toggle opens, at every breakpoint.
  * The reference doesn't distinguish "desktop nav" from "mobile nav"; it's
  * the same mechanism throughout, so this file no longer does either.
+ *
+ * The overlay itself is a two-column layout -- a muted "The Journey" column
+ * beside a headline-scale "Get Started" column -- mirroring exactly the
+ * reference's own open-menu structure (reference/Screenshot
+ * 2026-07-16 173302.png) and reusing the same JOURNEY_LINKS/PRIMARY_LINKS
+ * data footer.js renders, rather than a third, independent link list.
  *
  * Dispatches `transroyal:track-open` on document when either Track Shipment
  * action is used; tracking-panel.js listens for it.
@@ -56,16 +67,14 @@ export function mountNav(container) {
 
       <div class="nav__menu" id="nav-menu">
         <div class="nav__menu-inner">
-          <p class="nav__menu-eyebrow">Menu</p>
-          <ul class="nav__menu-links">
-            ${NAV_LINKS.map(
-              (link, i) => `<li style="--link-index:${i}"><a href="${link.href}">${link.label}</a></li>`
-            ).join('')}
-          </ul>
-          <button type="button" class="nav__menu-track" data-nav-track style="--link-index:${NAV_LINKS.length}">
-            <span>Track Shipment</span>
-            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href="/icons.svg#icon-arrow-right"></use></svg>
-          </button>
+          <div class="nav__menu-col nav__menu-col--journey">
+            <p class="nav__menu-label">The Journey</p>
+            <ul>${JOURNEY_LINKS.map(renderMenuLink).join('')}</ul>
+          </div>
+          <div class="nav__menu-col nav__menu-col--primary">
+            <p class="nav__menu-label">Get Started</p>
+            <ul>${PRIMARY_LINKS.map(renderMenuLink).join('')}</ul>
+          </div>
         </div>
       </div>
     </nav>
@@ -74,7 +83,6 @@ export function mountNav(container) {
   const nav = container.querySelector('.nav');
   const toggle = container.querySelector('[data-nav-toggle]');
   const menu = container.querySelector('#nav-menu');
-  const menuLinks = menu.querySelector('.nav__menu-links');
   const trackButtons = container.querySelectorAll('[data-nav-track]');
 
   let lastFocused = null;
@@ -111,7 +119,7 @@ export function mountNav(container) {
     setOpen(true);
     document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', onKeydown);
-    menuLinks.querySelector('a')?.focus();
+    menu.querySelector('a, button')?.focus();
   }
 
   function closeMenu({ restoreFocus = false } = {}) {
@@ -137,25 +145,6 @@ export function mountNav(container) {
       document.dispatchEvent(new CustomEvent('transroyal:track-open'));
     })
   );
-
-  // Stays fully transparent at rest -- an "elevated" backdrop only appears
-  // once the visitor has scrolled, so the bar never competes with the
-  // opening frame it floats above.
-  let ticking = false;
-  function updateElevation() {
-    nav.classList.toggle('nav--elevated', window.scrollY > SCROLL_ELEVATE_THRESHOLD);
-    ticking = false;
-  }
-  window.addEventListener(
-    'scroll',
-    () => {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(updateElevation);
-    },
-    { passive: true }
-  );
-  updateElevation();
 
   return nav;
 }

@@ -67,6 +67,14 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
 
+  /* Link-column layout shared by the nav overlay (nav.css) and the site
+     footer (footer.css) -- the extra indent/gap the reference gives its own
+     "Homepage"/"Other Pages" columns beyond the top bar's own edge gutter,
+     never applied to the top bar or the footer's bottom row. */
+  --menu-indent: clamp(48px, 9vw, 200px);
+  --menu-col-gap: clamp(64px, 10vw, 240px);
+  --menu-top-offset: clamp(88px, 22vh, 240px);
+
   /* --- motion --- */
   --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
   --duration-fast: 160ms;
