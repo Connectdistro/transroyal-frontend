@@ -41,7 +41,7 @@ export function mountNav(container) {
         <div class="nav__cluster">
           <a class="nav__brand" href="#top">
             <span class="nav__brand-mark" aria-hidden="true">
-              <svg viewBox="0 0 32 32" width="22" height="22"><use href="/icons.svg#icon-mark"></use></svg>
+              <svg viewBox="0 0 32 32" width="22" height="22"><use href="${import.meta.env.BASE_URL}icons.svg#icon-mark"></use></svg>
             </span>
             <span class="nav__brand-name">TransRoyal</span>
           </a>
