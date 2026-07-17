@@ -1,0 +1,41 @@
+/* Cinematic Polish Phase, Commit 2: the DOM cursor-follower pointer.js
+   creates. Position/stretch are driven every tick by direct `transform`
+   writes from pointer.js (can't be a CSS transition, since it updates
+   continuously) — only the magnetized "grow" state below uses a CSS
+   transition, reusing existing tokens verbatim rather than inventing new
+   timing values (this file's one hover-adjacent convention: interactive
+   elements already use --duration-fast/--ease-standard, see world.css's
+   .scene__cta and nav.css's button hovers). pointer.js already no-ops
+   entirely on coarse/touch pointers, so no separate touch media query is
+   needed here -- the element is simply never created. */
+@layer layout {
+  .cursor-follower {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1000;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1.5px solid var(--accent-strong);
+    background: rgb(79 163 255 / 12%);
+    pointer-events: none;
+    mix-blend-mode: screen;
+    transition:
+      width var(--duration-fast) var(--ease-standard),
+      height var(--duration-fast) var(--ease-standard),
+      background var(--duration-fast) var(--ease-standard);
+  }
+
+  .cursor-follower--magnetized {
+    width: 44px;
+    height: 44px;
+    background: rgb(79 163 255 / 18%);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cursor-follower {
+      transition: none;
+    }
+  }
+}
