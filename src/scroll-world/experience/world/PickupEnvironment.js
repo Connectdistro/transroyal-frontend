@@ -38,6 +38,10 @@ const REGION_Z = -95;
 
 const PULSE_PERIOD = 4200;
 const PULSE_DEPTH = 0.22;
+// Cinematic Polish Phase, Commit 4: a slower, calmer pulse than the route
+// line's own -- a scanner practical waiting on a scan, not a busier motif.
+const SCAN_PULSE_PERIOD = 2200;
+const SCAN_PULSE_DEPTH = 0.15;
 
 function createDockFloor() {
   const geometry = new BoxGeometry(34, 0.4, 30);
@@ -242,6 +246,14 @@ export class PickupEnvironment {
 
     const { group: scanGroup, light: scanLight } = createScanPractical();
     this.group.add(scanGroup, scanLight);
+    // Cinematic Polish Phase, Commit 4: the vehicle/driver stay static
+    // (mid-scan, a deliberate narrative moment -- see this file's own
+    // constant-velocity motion decision), but the scanner practical itself
+    // gets a subtle idle pulse so the chapter still reads as alive.
+    // Light/intensity only, never `.position` -- never implies the vehicle
+    // is moving.
+    this.scanLight = scanLight;
+    this.baseScanLightIntensity = scanLight.intensity;
 
     this.routeLine = createRouteLine();
     this.group.add(this.routeLine);
@@ -306,6 +318,9 @@ export class PickupEnvironment {
 
     const pulse = 1 - PULSE_DEPTH + PULSE_DEPTH * Math.sin((time.elapsed / PULSE_PERIOD) * Math.PI * 2);
     this.routeLine.material.opacity = this.routeLine.material.userData.baseOpacity * pulse;
+
+    const scanPulse = 1 - SCAN_PULSE_DEPTH + SCAN_PULSE_DEPTH * Math.sin((time.elapsed / SCAN_PULSE_PERIOD) * Math.PI * 2);
+    this.scanLight.intensity = this.baseScanLightIntensity * this.activityWeight * scanPulse;
   }
 
   setActivity(state) {

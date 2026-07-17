@@ -34,6 +34,17 @@ const PULSE_PERIOD = 3400;
 const PULSE_DEPTH = 0.25;
 const PARCEL_SPEED = 3.2;
 
+// Cinematic Polish Phase, Commit 4: see GroundEnvironment.js's own
+// identical rationale -- eased velocity instead of a constant speed that
+// snaps at the loop point. Parcels are one-directional (no wrap-in-place),
+// so the "taper" applies only approaching `endZ`; on reset to `startZ` the
+// live speed restarts at the same floor a decelerating truck would settle
+// to, so the parcel visibly accelerates back up rather than snapping to
+// full speed.
+const VELOCITY_HALF_LIFE_MS = 250;
+const TAPER_DISTANCE = CONVEYOR_LENGTH * 0.12;
+const MIN_TAPER_FACTOR = 0.2;
+
 function createMezzanineFloor() {
   const geometry = new BoxGeometry(30, 0.4, CONVEYOR_LENGTH + 6);
   const material = new MeshPhysicalMaterial({ color: FLOOR_COLOR, metalness: 0.1, roughness: 0.8, clearcoat: 0 });
@@ -98,6 +109,7 @@ function createConveyors() {
       parcel.castShadow = true;
       parcel.userData.startZ = REGION_Z - CONVEYOR_LENGTH / 2;
       parcel.userData.endZ = REGION_Z + CONVEYOR_LENGTH / 2;
+      parcel.userData.speed = PARCEL_SPEED;
       group.add(parcel);
       parcels.push(parcel);
     }
@@ -197,9 +209,21 @@ export class SortingEnvironment {
     updateParticles(this.particles, time.delta / 1000);
 
     const deltaSeconds = time.delta / 1000;
+    const velocityT = dampFactor(VELOCITY_HALF_LIFE_MS, time.delta);
     this.conveyors.userData.parcels.forEach((parcel) => {
-      parcel.position.z += PARCEL_SPEED * deltaSeconds;
-      if (parcel.position.z > parcel.userData.endZ) parcel.position.z = parcel.userData.startZ;
+      const distanceToEnd = parcel.userData.endZ - parcel.position.z;
+      const taper = Math.max(MIN_TAPER_FACTOR, Math.min(1, distanceToEnd / TAPER_DISTANCE));
+      const desiredSpeed = PARCEL_SPEED * taper;
+      parcel.userData.speed += (desiredSpeed - parcel.userData.speed) * velocityT;
+
+      parcel.position.z += parcel.userData.speed * deltaSeconds;
+      if (parcel.position.z > parcel.userData.endZ) {
+        parcel.position.z = parcel.userData.startZ;
+        // Restarts at the same floor a decelerating parcel settles to, so
+        // it accelerates back up from the belt's start rather than
+        // snapping straight to full speed.
+        parcel.userData.speed = PARCEL_SPEED * MIN_TAPER_FACTOR;
+      }
     });
 
     const pulse = 1 - PULSE_DEPTH + PULSE_DEPTH * Math.sin((time.elapsed / PULSE_PERIOD) * Math.PI * 2);

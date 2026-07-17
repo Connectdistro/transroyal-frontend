@@ -34,6 +34,16 @@ const HIGHWAY_LENGTH = 100;
 const LANE_X = [-16, -5.5, 6, 17];
 const FLEET_SPEED = 6.5;
 
+// Cinematic Polish Phase, Commit 4: "accelerate -> move -> settle," never an
+// instant speed. `speed` (userData) is the live, eased value; `targetSpeed`
+// is the authored constant it chases via dampFactor(). Tapering targetSpeed
+// down as a truck nears its own wrap point (rather than snapping speed to
+// zero at the boundary) means the eased live speed genuinely decelerates
+// into the wrap and re-accelerates back out of it, instead of popping.
+const VELOCITY_HALF_LIFE_MS = 300;
+const WRAP_TAPER_DISTANCE = HIGHWAY_LENGTH * 0.12;
+const MIN_TAPER_FACTOR = 0.15;
+
 function createHighway() {
   const group = new Group();
   const asphalt = new Mesh(
@@ -124,7 +134,9 @@ function createFleet() {
     truck.position.set(x, 0, z);
     truck.rotation.y = i % 2 === 0 ? 0 : Math.PI;
     truck.userData.direction = i % 2 === 0 ? 1 : -1;
-    truck.userData.speed = FLEET_SPEED * (0.7 + 0.3 * (i % 3) / 2);
+    truck.userData.targetSpeed = FLEET_SPEED * (0.7 + (0.3 * (i % 3)) / 2);
+    // Live value starts equal to the target -- no pop at load.
+    truck.userData.speed = truck.userData.targetSpeed;
     group.add(truck);
     trucks.push(truck);
   });
@@ -223,7 +235,14 @@ export class GroundEnvironment {
 
     const deltaSeconds = time.delta / 1000;
     const halfLength = HIGHWAY_LENGTH / 2;
+    const velocityT = dampFactor(VELOCITY_HALF_LIFE_MS, time.delta);
     this.fleet.userData.trucks.forEach((truck) => {
+      const distanceToWrap =
+        truck.userData.direction > 0 ? REGION_Z + halfLength - truck.position.z : truck.position.z - (REGION_Z - halfLength);
+      const taper = Math.max(MIN_TAPER_FACTOR, Math.min(1, distanceToWrap / WRAP_TAPER_DISTANCE));
+      const desiredSpeed = truck.userData.targetSpeed * taper;
+      truck.userData.speed += (desiredSpeed - truck.userData.speed) * velocityT;
+
       truck.position.z += truck.userData.speed * truck.userData.direction * deltaSeconds;
       if (truck.position.z > REGION_Z + halfLength) truck.position.z = REGION_Z - halfLength;
       if (truck.position.z < REGION_Z - halfLength) truck.position.z = REGION_Z + halfLength;

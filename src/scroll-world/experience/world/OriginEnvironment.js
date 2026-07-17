@@ -28,7 +28,12 @@ export class OriginEnvironment {
     this.ribs = createRibs();
     this.walkway = createWalkway();
     this.routeLines = createRouteLines();
-    this.particles = createParticles();
+    // Cinematic Polish Phase, Commit 4: Origin is the one particle field
+    // opted into the second turbulence layer -- the sparse, atmospheric
+    // opening beat is where a touch of layered motion reads as ambience
+    // rather than busyness. Every other chapter's createParticles() call
+    // is unchanged (turbulence defaults to 0, fully inert).
+    this.particles = createParticles({ turbulence: 0.4 });
     const { key, fill } = createLights();
     this.keyLight = key;
     this.fillLight = fill;
@@ -86,7 +91,7 @@ export class OriginEnvironment {
     this.keyLight.color.lerp(this.targetKeyColor, tintT);
     this.fillLight.color.lerp(this.targetFillColor, tintT);
 
-    updateParticles(this.particles, time.delta / 1000);
+    updateParticles(this.particles, time.delta / 1000, time.elapsed);
 
     const pulse = 1 - PULSE_DEPTH + PULSE_DEPTH * Math.sin((time.elapsed / PULSE_PERIOD) * Math.PI * 2);
     this.routeLines.userData.pulseMaterials.forEach((material) => {

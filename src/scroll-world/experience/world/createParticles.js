@@ -17,6 +17,17 @@ const DRIFT_SPEED = 0.35;
  *  rather than duplicating this file. Defaults reproduce Origin's original
  *  values exactly (including the -10 z-offset), so the existing
  *  `createParticles()` call in OriginEnvironment is unchanged. */
+// Cinematic Polish Phase, Commit 4: opt-in second wind layer (Motion
+// principle: "layered turbulence"). `turbulence` (world units, default 0 --
+// every existing createParticles() call site is unaffected unless it opts
+// in) is the amplitude of a per-particle X oscillation around each
+// particle's own construction-time base X, not an accumulating drift --
+// particles sway in place rather than wandering off over time. Reuses the
+// per-particle position Float32Array already allocated below; the one new
+// allocation (`baseX`) happens at construction, never per frame, and only
+// when turbulence is actually requested.
+const TURBULENCE_PERIOD_MS = 7000;
+
 export function createParticles({
   count = PARTICLE_COUNT,
   spreadX = SPREAD_X,
@@ -28,6 +39,7 @@ export function createParticles({
   color = OFFWHITE_100,
   size = 0.05,
   opacity = 0.5,
+  turbulence = 0,
 } = {}) {
   const positions = new Float32Array(count * 3);
   for (let i = 0; i < count; i += 1) {
@@ -51,16 +63,31 @@ export function createParticles({
   const points = new Points(geometry, material);
   points.userData.driftSpeed = driftSpeed;
   points.userData.height = height;
+  points.userData.turbulence = turbulence;
+  if (turbulence > 0) {
+    points.userData.baseX = new Float32Array(count);
+    for (let i = 0; i < count; i += 1) points.userData.baseX[i] = positions[i * 3];
+  }
   return points;
 }
 
-export function updateParticles(points, deltaSeconds) {
+/** `elapsedMs` is optional -- only needed (and only read) when a particle
+ *  system was created with `turbulence > 0`; every call site that doesn't
+ *  pass it keeps working exactly as before. */
+export function updateParticles(points, deltaSeconds, elapsedMs) {
   const position = points.geometry.attributes.position;
   const drift = points.userData.driftSpeed * deltaSeconds;
+  const turbulence = points.userData.turbulence;
+  const baseX = points.userData.baseX;
 
   for (let i = 0; i < position.count; i += 1) {
     const y = position.getY(i) + drift;
     position.setY(i, y > points.userData.height ? 0 : y);
+
+    if (turbulence > 0) {
+      const sway = turbulence * Math.sin(elapsedMs / TURBULENCE_PERIOD_MS + i);
+      position.setX(i, baseX[i] + sway);
+    }
   }
 
   position.needsUpdate = true;
