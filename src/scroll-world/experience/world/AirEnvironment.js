@@ -7,6 +7,8 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
+  PointLight,
+  SphereGeometry,
   TubeGeometry,
   Vector3,
 } from 'three';
@@ -30,6 +32,10 @@ const ENGINE_COLOR = 0x14181f;
 // environment files have no dependencies on each other; the shared hex
 // value alone carries "the same shipment" through both chapters).
 const CARGO_POD_COLOR = 0x2f5fae;
+// A warm accent, deliberately distinct from the chapter's cool electric-blue
+// palette -- "destination glow warming" (Commit 4) reads against this
+// contrast, and it doubles as the arrival beacon's own color.
+const DESTINATION_COLOR = 0xffb347;
 
 // Well past Ground's own region -- height (not distance) is what protects
 // this chapter from the others, since the camera sits far above every
@@ -38,6 +44,13 @@ const REGION_Z = -460;
 
 const TRAIL_COUNT = 5;
 const PULSE_PERIOD = 5000;
+
+// Destination marker brightness ramp (Commit 2/4): normal pulse until the
+// approach zone, ramping to a held, brighter arrival state.
+const DESTINATION_APPROACH_START = 0.75;
+const DESTINATION_ARRIVAL_THRESHOLD = 0.97;
+const DESTINATION_ARRIVAL_BOOST = 2.6;
+const DESTINATION_BOOST_HALF_LIFE_MS = 600;
 
 function createLandmass() {
   const group = new Group();
@@ -226,6 +239,58 @@ function createOriginVignette() {
   return group;
 }
 
+const THREAD_TUBULAR_SEGMENTS = 120;
+const THREAD_RADIAL_SEGMENTS = 8;
+const THREAD_INDICES_PER_RING = THREAD_RADIAL_SEGMENTS * 6;
+
+/** Two tubes built from the SAME flight-path curve instance (never a
+ *  duplicate) -- a dim, always-fully-visible base ("remaining route is
+ *  subtle") and a brighter overlay whose BufferGeometry.setDrawRange is
+ *  advanced each frame in update() to grow behind the aircraft, allocation-
+ *  free, the same TubeGeometry + native draw-range technique already used
+ *  by every other chapter's route line (just revealed progressively here
+ *  instead of drawn whole). Commit 1's curve starts at P0 (u=0), and
+ *  TubeGeometry's index buffer is built ring-by-ring along that same
+ *  parameterization, so revealing indices from 0 upward grows the tube
+ *  from the same point the aircraft departs. */
+function createDeliveryThread(curve) {
+  const group = new Group();
+
+  const baseGeometry = new TubeGeometry(curve, THREAD_TUBULAR_SEGMENTS, 0.35, THREAD_RADIAL_SEGMENTS, false);
+  const baseMaterial = new MeshBasicMaterial({ color: ELECTRIC_400, transparent: true, opacity: 0.18 });
+  group.add(new Mesh(baseGeometry, baseMaterial));
+
+  const overlayGeometry = new TubeGeometry(curve, THREAD_TUBULAR_SEGMENTS, 0.45, THREAD_RADIAL_SEGMENTS, false);
+  const overlayMaterial = new MeshBasicMaterial({ color: ELECTRIC_400, transparent: true, opacity: 0.85 });
+  overlayGeometry.setDrawRange(0, 0);
+  group.add(new Mesh(overlayGeometry, overlayMaterial));
+
+  return { group, overlayGeometry, indexCount: overlayGeometry.index.count };
+}
+
+/** A modest glow + practical light at the flight path's own destination
+ *  (P5) -- the same glow-mesh-plus-PointLight beacon precedent every other
+ *  chapter already uses (Ground's dock beacon, FinalMile's porch light),
+ *  scaled for this chapter's much larger distances. Pulses gently at rest;
+ *  update() ramps its brightness target up as flightProgress approaches 1
+ *  (Commit 4 supplies the real progress; this commit's placeholder in
+ *  update() exercises the same ramp). */
+function createDestinationMarker(position) {
+  const group = new Group();
+
+  const glow = new Mesh(
+    new SphereGeometry(1.4, 16, 16),
+    new MeshBasicMaterial({ color: DESTINATION_COLOR, transparent: true, opacity: 0.85 })
+  );
+  group.add(glow);
+
+  const light = new PointLight(DESTINATION_COLOR, 2.4, 40, 2);
+  group.add(light);
+
+  group.position.copy(position);
+  return { group, glow, light, baseGlowOpacity: 0.85, baseLightIntensity: 2.4 };
+}
+
 /**
  * The Air Cargo Hub / Global Logistics (Production Handbook Section 23,
  * Scene 05) -- experienced from true altitude, the journey's continental
@@ -256,6 +321,20 @@ export class AirEnvironment {
     this.aircraft.lookAt(this.flightPath.getPointAt(0.01));
     this.group.add(this.aircraft);
     this.group.add(createOriginVignette());
+
+    // Commit 2: the progressive delivery thread and destination marker,
+    // both built from this.flightPath -- the same curve instance, never a
+    // duplicate. flightProgress is a placeholder linear advance here purely
+    // to exercise the setDrawRange/brightness-ramp mechanisms end-to-end;
+    // Commit 3 replaces the advance itself with the real eased,
+    // curve-sampled flight motion (this field and everything that reads it
+    // stays the same).
+    this.deliveryThread = createDeliveryThread(this.flightPath);
+    this.group.add(this.deliveryThread.group);
+    this.destinationMarker = createDestinationMarker(this.flightPath.getPointAt(1));
+    this.group.add(this.destinationMarker.group);
+    this.flightProgress = 0;
+    this.destinationBoost = 1;
 
     // Section 23: key electric blue, fill constant royal blue, "both read at
     // greater distance and softer falloff than any other chapter."
@@ -312,6 +391,35 @@ export class AirEnvironment {
     this.lightTrails.userData.lines.forEach((line) => {
       line.material.opacity = line.material.userData.baseOpacity * pulse;
     });
+
+    // Commit 2 placeholder: linear advance only, purely to exercise the
+    // delivery-thread reveal and destination-marker ramp end-to-end.
+    // Commit 3 replaces this one line with the real eased, curve-sampled
+    // flight motion -- flightProgress itself, and everything below that
+    // reads it, is already the real mechanism.
+    this.flightProgress = (this.flightProgress + time.delta * 0.00004) % 1;
+
+    const revealIndices = Math.floor(
+      (this.deliveryThread.indexCount * this.flightProgress) / THREAD_INDICES_PER_RING
+    ) * THREAD_INDICES_PER_RING;
+    this.deliveryThread.overlayGeometry.setDrawRange(0, revealIndices);
+
+    let boostTarget = 1;
+    if (this.flightProgress >= DESTINATION_ARRIVAL_THRESHOLD) {
+      boostTarget = DESTINATION_ARRIVAL_BOOST;
+    } else if (this.flightProgress > DESTINATION_APPROACH_START) {
+      const approachT =
+        (this.flightProgress - DESTINATION_APPROACH_START) /
+        (DESTINATION_ARRIVAL_THRESHOLD - DESTINATION_APPROACH_START);
+      boostTarget = 1 + approachT * (DESTINATION_ARRIVAL_BOOST - 1);
+    }
+    this.destinationBoost +=
+      (boostTarget - this.destinationBoost) * dampFactor(DESTINATION_BOOST_HALF_LIFE_MS, time.delta);
+
+    const markerPulse = 0.85 + 0.15 * Math.sin(time.elapsed / PULSE_PERIOD + 1.7);
+    const marker = this.destinationMarker;
+    marker.glow.material.opacity = Math.min(1, marker.baseGlowOpacity * markerPulse * this.destinationBoost);
+    marker.light.intensity = marker.baseLightIntensity * markerPulse * this.destinationBoost;
   }
 
   setActivity(state) {
