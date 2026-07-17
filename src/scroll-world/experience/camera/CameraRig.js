@@ -18,6 +18,25 @@ const POSITION_HALF_LIFE_MS = 140;
 // multiplies against.
 const DRIFT_PERIOD_MS = 5000;
 
+// Cinematic Polish Phase, Commit 3: cursor-driven parallax, a third
+// additive offset layered the same way drift is -- never touching
+// desiredPosition/desiredTarget, so it can't alter shot composition or
+// interfere with shot-to-shot easing. Amplitude deliberately at or below
+// the existing drift's own (0.25) -- "subtle, never dramatic" per this
+// phase's own constraint.
+const CURSOR_HALF_LIFE_MS = 180;
+const CURSOR_AMPLITUDE = 0.15;
+
+// Module-scope scratch vectors for the camera-relative right/up basis
+// cursor parallax needs -- allocated once, reused every frame (zero
+// per-frame allocation). Safe as module scope since CameraRig is a
+// singleton (Experience.instance guards against a second instance ever
+// existing).
+const UNIT_X = new Vector3(1, 0, 0);
+const UNIT_Y = new Vector3(0, 1, 0);
+const scratchRight = new Vector3();
+const scratchUp = new Vector3();
+
 /** Merges a shot's optional `drift` fields over DEFAULT_DRIFT (per-field,
  *  not all-or-nothing) and normalizes `axis` to a unit Vector3 once --
  *  called from setShot(), not every frame, since a shot's drift config
@@ -42,6 +61,13 @@ function resolveDrift(drift) {
  * (Section 23's per-chapter framing, authored in shots.js) and the rig
  * eases its live position/target/fov toward that shot, plus a small,
  * bounded, per-shot-configurable drift once mid-chapter (see update()).
+ *
+ * `setCursorInfluence(x, y)` (Commit 3) is pointer.js's entry point --
+ * pointer.js only ever computes a 2D signal and calls this method; it never
+ * touches `instance.position` itself, upholding the ownership rule above.
+ * update() eases toward it and applies it as a small, camera-relative
+ * screen-space nudge, a third additive offset alongside shot-easing and
+ * drift.
  *
  * Position and target are tracked as plain Vector3s (`desiredPosition`,
  * `desiredTarget`) separate from Three's own camera transform, specifically
@@ -80,6 +106,12 @@ export class CameraRig {
     this.progress = 0;
     this.activeShotId = null;
     this.activeDrift = resolveDrift(undefined);
+
+    // Cinematic Polish Phase, Commit 3: cursor parallax target/live offset,
+    // in normalized -1..1 pointer units (not world units -- CURSOR_AMPLITUDE
+    // in update() is what converts to a world-space nudge).
+    this.cursorInfluence = new Vector3();
+    this.cursorOffset = new Vector3();
 
     this.setShot(DEFAULT_SHOT_ID);
   }
@@ -136,6 +168,17 @@ export class CameraRig {
     this.progress = Math.min(1, Math.max(0, progress));
   }
 
+  /** Cinematic Polish Phase, Commit 3: pointer.js's entry point. `x`/`y` are
+   *  normalized -1..1 pointer coordinates -- stored as the *target* offset;
+   *  update() eases the live `cursorOffset` toward it every frame. Also
+   *  how a hovered CTA "eases the camera toward it": pointer.js simply
+   *  passes an amplified (x, y) while hovering, and the same easing
+   *  smooths both the ramp-up and the decay back down on hover-out -- no
+   *  second easing pipeline needed here. */
+  setCursorInfluence(x, y) {
+    this.cursorInfluence.set(Math.min(1, Math.max(-1, x)), Math.min(1, Math.max(-1, y)), 0);
+  }
+
   /**
    * The single abstraction over Three's lookAt. Everything that needs the
    * camera oriented goes through here rather than calling
@@ -161,6 +204,13 @@ export class CameraRig {
     this.target.lerp(this.desiredTarget, t);
     this.setFov(this.instance.fov + (this.desiredFov - this.instance.fov) * t);
 
+    // Camera-relative right/up basis, from this frame's incoming
+    // orientation (one-frame-stale by the time applyLookAt() runs below --
+    // imperceptible for a subtle parallax nudge, and avoids computing
+    // lookAt twice per frame). Reused for cursor parallax below.
+    scratchRight.copy(UNIT_X).applyQuaternion(this.instance.quaternion);
+    scratchUp.copy(UNIT_Y).applyQuaternion(this.instance.quaternion);
+
     // Exactly 0 at this chapter's own start/end (`progress` 0 or 1), so it
     // never interferes with the shot-to-shot easing above -- drift only
     // "wakes up" once settled mid-chapter and fades out before the next
@@ -171,6 +221,17 @@ export class CameraRig {
     const oscillation = Math.sin((this.experience.time.elapsed / DRIFT_PERIOD_MS) * this.activeDrift.speed * Math.PI * 2);
     const offset = this.activeDrift.amplitude * envelope * oscillation;
     this.instance.position.addScaledVector(this.activeDrift.axisVector, offset);
+
+    // Cursor parallax (Commit 3) -- a third additive offset, same pattern
+    // as drift above: never touches desiredPosition/desiredTarget, applied
+    // after the shot-easing lerp so it can't alter shot composition.
+    // `-cursorOffset.y` because pointer.js's y follows clientY convention
+    // (positive toward the bottom of the screen); moving the pointer
+    // toward the top should nudge the camera up, not down.
+    const cursorT = dampFactor(CURSOR_HALF_LIFE_MS, dt);
+    this.cursorOffset.lerp(this.cursorInfluence, cursorT);
+    this.instance.position.addScaledVector(scratchRight, this.cursorOffset.x * CURSOR_AMPLITUDE);
+    this.instance.position.addScaledVector(scratchUp, -this.cursorOffset.y * CURSOR_AMPLITUDE);
 
     this.applyLookAt();
   }

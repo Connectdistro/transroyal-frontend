@@ -11,7 +11,10 @@ import { dampFactor } from './experience/utils/damp.js';
  * "3D-ness" comes from Commit 3 layering the eased value onto camera
  * parallax (CameraRig.setCursorInfluence) -- this file only computes
  * numbers and moves a DOM element; it never touches the camera or the
- * Three.js scene graph itself.
+ * Three.js scene graph itself. The one call to that method per tick is
+ * the full extent of this file's involvement with the camera -- the
+ * ownership rule ("CameraRig is the only class that mutates the camera
+ * transform") lives entirely in CameraRig.js, not here.
  *
  * One shared `experience.time` tick subscription, matching every other
  * tick-consumer in this codebase -- no second requestAnimationFrame loop.
@@ -24,6 +27,12 @@ const FOLLOWER_HALF_LIFE_MS = 90;
 // reads as a wild elastic snap -- "no abrupt movement."
 const MAX_STRETCH = 0.55;
 const STRETCH_SENSITIVITY = 0.035;
+// Cinematic Polish Phase, Commit 3: while hovering a CTA, the camera-facing
+// signal is boosted beyond the CTA's own screen position so the "ease
+// toward the button" read is clearly stronger than ambient pointer sway --
+// CameraRig.setCursorInfluence() clamps to -1..1 regardless, so this only
+// ever pushes further into an already-bounded range, never unbounded.
+const CTA_HOVER_BOOST = 1.6;
 
 export function mountPointer(worldRoot, experience) {
   // No-op entirely on touch/coarse-pointer devices -- no listeners, no DOM
@@ -38,6 +47,19 @@ export function mountPointer(worldRoot, experience) {
     (event) => {
       rawX = (event.clientX / window.innerWidth) * 2 - 1;
       rawY = (event.clientY / window.innerHeight) * 2 - 1;
+    },
+    { passive: true }
+  );
+
+  // Pointer leaving the viewport entirely (not just a hover target) resets
+  // the raw signal to center -- otherwise it would stick at its last value
+  // forever, leaving the follower and the camera parallax (Commit 3)
+  // permanently offset toward wherever the pointer last was.
+  document.addEventListener(
+    'mouseleave',
+    () => {
+      rawX = 0;
+      rawY = 0;
     },
     { passive: true }
   );
@@ -106,5 +128,19 @@ export function mountPointer(worldRoot, experience) {
     follower.style.transform =
       `translate3d(${followerX}px, ${followerY}px, 0) translate(-50%, -50%) ` +
       `rotate(${angle}rad) scaleX(${1 + stretch}) scaleY(${1 - stretch * 0.4}) rotate(${-angle}rad)`;
+
+    // Camera parallax (Commit 3): ordinary pointer position, or -- while a
+    // CTA is hovered -- that CTA's own screen position, boosted, so the
+    // camera visibly eases further toward it than ambient sway alone would
+    // produce. Decay back to ordinary tracking on hover-out needs no
+    // separate code: CameraRig's own easing smooths the transition either
+    // way, since this is the same single call/input every tick regardless.
+    if (isMagnetized) {
+      const ndcX = ((magnetX / window.innerWidth) * 2 - 1) * CTA_HOVER_BOOST;
+      const ndcY = ((magnetY / window.innerHeight) * 2 - 1) * CTA_HOVER_BOOST;
+      experience.camera.setCursorInfluence(ndcX, ndcY);
+    } else {
+      experience.camera.setCursorInfluence(rawX, rawY);
+    }
   });
 }
