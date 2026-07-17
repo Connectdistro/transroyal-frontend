@@ -399,6 +399,119 @@ function createRouteLine() {
   return new Mesh(new TubeGeometry(curve, 100, 0.05, 8, false), material);
 }
 
+// Ground Chapter Cinematic Realism Pass, Commit 2: the yard-approach
+// foreground band, nearer camera than the dock cluster itself (DOCK_CENTER
+// above) -- the visitor "arrives" through a supervised industrial space
+// before reaching the operation. Placed along the same sightline formula,
+// roughly z=-260 to -280.
+const YARD_APPROACH_X = -10;
+const YARD_APPROACH_Z = -270;
+
+/** Painted surface detail -- reuses the exact technique the highway's own
+ *  dashed lane lines already use (thin, flat MeshBasicMaterial boxes laid
+ *  on the asphalt), never a texture/decal. */
+function createYardMarkings() {
+  const group = new Group();
+  const paintMaterial = new MeshBasicMaterial({ color: OFFWHITE_100, transparent: true, opacity: 0.4 });
+  const hazardMaterial = new MeshBasicMaterial({ color: 0xd8a021, transparent: true, opacity: 0.5 });
+
+  // Parking-bay markings -- a small row of painted rectangles outlining
+  // where a trailer stages.
+  for (let i = 0; i < 3; i += 1) {
+    const bay = new Group();
+    const left = new Mesh(new BoxGeometry(0.08, 0.02, 5), paintMaterial);
+    left.position.set(-1.3, 0.01, 0);
+    const right = new Mesh(new BoxGeometry(0.08, 0.02, 5), paintMaterial);
+    right.position.set(1.3, 0.01, 0);
+    bay.add(left, right);
+    bay.position.set(YARD_APPROACH_X + i * 3.2, 0, YARD_APPROACH_Z - 6);
+    group.add(bay);
+  }
+
+  // Hazard striping -- alternating diagonal bars, the same visual language
+  // real dock aprons use to mark a no-linger zone.
+  for (let i = 0; i < 6; i += 1) {
+    const stripe = new Mesh(new BoxGeometry(0.6, 0.02, 0.18), hazardMaterial);
+    stripe.rotation.y = Math.PI / 5;
+    stripe.position.set(YARD_APPROACH_X + 6 + i * 0.55, 0.01, YARD_APPROACH_Z + 4);
+    group.add(stripe);
+  }
+
+  // Wheel stops at each trailer position (dock truck + queued truck).
+  const stopMaterial = new MeshStandardMaterial({ color: OFFWHITE_100, roughness: 0.7, metalness: 0 });
+  [DOCK_CENTER_Z + 14 + 4.5, DOCK_CENTER_Z + 30 + 4.5].forEach((z) => {
+    const stop = new Mesh(new BoxGeometry(1.8, 0.2, 0.3), stopMaterial);
+    stop.rotation.x = 0.2;
+    stop.position.set(DOCK_CENTER_X - 3, 0.1, z);
+    group.add(stop);
+  });
+
+  // Dock bumpers at the dock face itself.
+  const bumperMaterial = new MeshStandardMaterial({ color: 0x141a3a, roughness: 0.6, metalness: 0.2 });
+  [-4.3, -1.7].forEach((x) => {
+    const bumper = new Mesh(new CylinderGeometry(0.15, 0.15, 0.8, 8), bumperMaterial);
+    bumper.rotation.z = Math.PI / 2;
+    bumper.position.set(DOCK_CENTER_X + x, 0.6, DOCK_CENTER_Z + 7.4);
+    group.add(bumper);
+  });
+
+  return group;
+}
+
+/** Safety/security props -- cheap, repeated, individually varied so a row
+ *  never reads as copy-pasted (per-instance jitter + varyMaterial). */
+function createYardSafety() {
+  const group = new Group();
+  const coneMaterial = new MeshStandardMaterial({ color: 0xd8621a, roughness: 0.55, metalness: 0 });
+  const bollardMaterial = new MeshStandardMaterial({ color: 0x0c1338, roughness: 0.5, metalness: 0.3 });
+  const bollardBandMaterial = new MeshBasicMaterial({ color: OFFWHITE_100 });
+  const fenceMaterial = new MeshStandardMaterial({ color: 0x141a3a, roughness: 0.6, metalness: 0.35 });
+  const fireBoxMaterial = new MeshStandardMaterial({ color: 0x8a1c1c, roughness: 0.5, metalness: 0.2 });
+  const fireBoxEdge = new MeshBasicMaterial({ color: OFFWHITE_100 });
+
+  for (let i = 0; i < 5; i += 1) {
+    const material = coneMaterial.clone();
+    varyMaterial(material, 400 + i);
+    const cone = new Mesh(new CylinderGeometry(0.02, 0.22, 0.55, 8), material);
+    cone.position.set(YARD_APPROACH_X + 3 + i * 2.1 + (i % 2) * 0.3, 0.275, YARD_APPROACH_Z - 1 - (i % 2) * 0.6);
+    group.add(cone);
+  }
+
+  for (let i = 0; i < 6; i += 1) {
+    const bollardMat = bollardMaterial.clone();
+    varyMaterial(bollardMat, 420 + i);
+    const bollard = new Mesh(new CylinderGeometry(0.14, 0.14, 0.9, 10), bollardMat);
+    const band = new Mesh(new CylinderGeometry(0.15, 0.15, 0.15, 10), bollardBandMaterial);
+    band.position.y = 0.15;
+    bollard.add(band);
+    bollard.position.set(YARD_APPROACH_X - 6 + i * 3.4, 0.45, YARD_APPROACH_Z + 8);
+    group.add(bollard);
+  }
+
+  // Low security fencing along the yard's far edge (background band).
+  const postGeometry = new CylinderGeometry(0.08, 0.08, 1.1, 8);
+  const railGeometry = new BoxGeometry(18, 0.06, 0.06);
+  for (let i = 0; i < 2; i += 1) {
+    const post = new Mesh(postGeometry, fenceMaterial);
+    post.position.set(DOCK_CENTER_X - 14 + i * 18, 0.55, DOCK_CENTER_Z - 18);
+    group.add(post);
+  }
+  [0.4, 0.9].forEach((y) => {
+    const rail = new Mesh(railGeometry, fenceMaterial);
+    rail.position.set(DOCK_CENTER_X - 5, y, DOCK_CENTER_Z - 18);
+    group.add(rail);
+  });
+
+  const fireBox = new Mesh(new BoxGeometry(0.5, 0.7, 0.35), fireBoxMaterial);
+  const fireBoxTrim = new Mesh(new BoxGeometry(0.54, 0.1, 0.39), fireBoxEdge);
+  fireBoxTrim.position.y = 0.3;
+  fireBox.add(fireBoxTrim);
+  fireBox.position.set(DOCK_CENTER_X - 7.5, 0.35, DOCK_CENTER_Z + 0.8);
+  group.add(fireBox);
+
+  return group;
+}
+
 /**
  * The Container Port / Road Network (Production Handbook Section 23, Scene
  * 04) -- domestic scale and reach, a fleet in constant physical motion. Own
@@ -440,6 +553,10 @@ export class GroundEnvironment {
     this.forklifts[1].position.set(DOCK_CENTER_X + 4, 0, DOCK_CENTER_Z + 6);
     this.forklifts[1].rotation.y = Math.PI * 0.15;
     this.forklifts.forEach((forklift) => this.group.add(forklift));
+
+    // Ground Chapter Cinematic Realism Pass, Commit 2: static industrial
+    // detail -- markings/safety props around the dock/yard built above.
+    this.group.add(createYardMarkings(), createYardSafety());
 
     // Heaviest ground-level haze in the journey (Section 23) -- the densest
     // particle field of any chapter so far.
