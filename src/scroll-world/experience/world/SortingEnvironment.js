@@ -13,6 +13,7 @@ import { createLights } from './createLights.js';
 import { createParticles, updateParticles } from './createParticles.js';
 import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR, LIGHT_TINT_HALF_LIFE_MS } from '../utils/damp.js';
 import { LIGHT_TINTS } from '../camera/shots.js';
+import { varyMaterial } from './materialVariation.js';
 
 const STRUCTURE_COLOR = 0x0a1030;
 const FLOOR_COLOR = 0x080d33;
@@ -103,7 +104,14 @@ function createConveyors() {
     });
 
     for (let p = 0; p < 4; p += 1) {
-      const parcel = new Mesh(new BoxGeometry(0.9, 0.6, 0.9), parcelMaterial);
+      // Cinematic Polish Phase, Commit 5: parcels previously shared one
+      // material instance across all 12 -- per-instance variation needs
+      // its own clone first (a small, deliberate, construction-time-only
+      // allocation increase: 1 -> 12 material instances, never touched
+      // again per frame).
+      const parcelInstanceMaterial = parcelMaterial.clone();
+      varyMaterial(parcelInstanceMaterial, lineIndex * 4 + p);
+      const parcel = new Mesh(new BoxGeometry(0.9, 0.6, 0.9), parcelInstanceMaterial);
       const z = REGION_Z - CONVEYOR_LENGTH / 2 + p * (CONVEYOR_LENGTH / 4) + lineIndex * 3;
       parcel.position.set(x, 0.55, z);
       parcel.castShadow = true;

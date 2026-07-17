@@ -14,6 +14,7 @@ import { createLights } from './createLights.js';
 import { createParticles, updateParticles } from './createParticles.js';
 import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR, LIGHT_TINT_HALF_LIFE_MS } from '../utils/damp.js';
 import { LIGHT_TINTS } from '../camera/shots.js';
+import { varyMaterial } from './materialVariation.js';
 
 const ASPHALT_COLOR = 0x070a24;
 const HUB_COLOR = 0x0a1030;
@@ -84,9 +85,13 @@ function createHubSilhouettes() {
   return group;
 }
 
-function createTruck(color) {
+function createTruck(color, seed = 0) {
   const group = new Group();
   const bodyMaterial = new MeshStandardMaterial({ color, roughness: 0.4, metalness: 0.4 });
+  // Cinematic Polish Phase, Commit 5: a small, deterministic per-truck wear
+  // variation so the fleet doesn't read as four identical, bit-for-bit
+  // copies -- construction time only, zero per-frame cost.
+  varyMaterial(bodyMaterial, seed);
   const rubberMaterial = new MeshStandardMaterial({ color: RUBBER_COLOR, roughness: 0.9, metalness: 0.1 });
   const lightMaterial = new MeshBasicMaterial({ color: ELECTRIC_400 });
 
@@ -129,7 +134,7 @@ function createFleet() {
   const colors = [0x0c1338, 0x0e1642, 0x0a102e];
 
   LANE_X.forEach((x, i) => {
-    const truck = createTruck(colors[i % colors.length]);
+    const truck = createTruck(colors[i % colors.length], i);
     const z = REGION_Z - HIGHWAY_LENGTH / 2 + ((i * HIGHWAY_LENGTH) / LANE_X.length);
     truck.position.set(x, 0, z);
     truck.rotation.y = i % 2 === 0 ? 0 : Math.PI;
