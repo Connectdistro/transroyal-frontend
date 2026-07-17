@@ -67,6 +67,24 @@ const FLIGHT_BANK_LOOK_AHEAD = 0.02;
 const FLIGHT_MAX_BANK = (22 * Math.PI) / 180;
 const FLIGHT_BANK_GAIN = 60;
 
+// Loop behavior (Commit 4): a brief held arrival at the destination marker's
+// brightest, then an eased rewind back to 0 -- the same
+// dwell-then-transition idiom as Ground's dock cycle phases, just simpler
+// (one continuous journey, no multi-actor choreography). The rewind is
+// deliberately much faster than the forward flight so it reads as a
+// distinct "reset" beat rather than a naturalistic reverse flight.
+const FLIGHT_HOLD_DURATION_MS = 1800;
+const FLIGHT_RESET_HALF_LIFE_MS = 450;
+const FLIGHT_RESET_SNAP_THRESHOLD = 0.01;
+
+// "Sunlight catching the fuselage" on approach (Commit 4): a small extra
+// multiplier on the key light only, ramping up over the flight's final
+// quarter -- same activityWeight-multiplication pattern already used
+// everywhere, layered with its own eased target so it never jumps.
+const FLIGHT_SUNLIGHT_START = 0.75;
+const FLIGHT_SUNLIGHT_BOOST = 1.35;
+const FLIGHT_SUNLIGHT_HALF_LIFE_MS = 1200;
+
 // Module-scope scratch vectors, reused every frame (never reallocated) as
 // `optionalTarget` args to Curve.getPointAt()/getTangentAt() -- Goal 9's
 // zero-per-frame-allocation rule.
@@ -358,6 +376,9 @@ export class AirEnvironment {
     this.group.add(this.destinationMarker.group);
     this.flightProgress = 0;
     this.flightSpeed = 0;
+    this.flightState = 'flying';
+    this.flightHoldTimer = 0;
+    this.flightSunlightBoost = 1;
     this.destinationBoost = 1;
 
     // Section 23: key electric blue, fill constant royal blue, "both read at
@@ -398,7 +419,6 @@ export class AirEnvironment {
 
   update(time) {
     this.activityWeight += (this.targetActivityWeight - this.activityWeight) * dampFactor(ACTIVITY_HALF_LIFE_MS, time.delta);
-    this.keyLight.intensity = this.baseKeyIntensity * this.activityWeight;
     this.fillLight.intensity = this.baseFillIntensity * this.activityWeight;
 
     const tintT = dampFactor(LIGHT_TINT_HALF_LIFE_MS, time.delta);
@@ -421,17 +441,47 @@ export class AirEnvironment {
       line.material.opacity = line.material.userData.baseOpacity * pulse;
     });
 
-    // Commit 3: eased speed chases a target that tapers near both curve
-    // ends (accelerate off P0, cruise, decelerate into approach), then
-    // advances flightProgress -- replaces Commit 2's placeholder linear
-    // advance; everything downstream (thread reveal, destination ramp)
-    // already reads flightProgress and is unchanged.
+    // Commit 3/4: eased speed chases a target that tapers near both curve
+    // ends (accelerate off P0, cruise, decelerate into approach) while
+    // 'flying'; on reaching the destination it holds briefly (the
+    // destination marker's brightest beat), then eases back to 0 and
+    // resumes -- everything downstream (thread reveal, destination ramp)
+    // already reads flightProgress and needs no separate reset.
     const deltaSeconds = time.delta / 1000;
-    const taperToEnd = Math.max(FLIGHT_MIN_TAPER, Math.min(1, (1 - this.flightProgress) / FLIGHT_TAPER_DISTANCE));
-    const taperFromStart = Math.max(FLIGHT_MIN_TAPER, Math.min(1, this.flightProgress / FLIGHT_TAPER_DISTANCE));
-    const desiredSpeed = FLIGHT_CRUISE_SPEED * Math.min(taperToEnd, taperFromStart);
-    this.flightSpeed += (desiredSpeed - this.flightSpeed) * dampFactor(FLIGHT_VELOCITY_HALF_LIFE_MS, time.delta);
-    this.flightProgress = (this.flightProgress + this.flightSpeed * deltaSeconds) % 1;
+    if (this.flightState === 'flying') {
+      const taperToEnd = Math.max(FLIGHT_MIN_TAPER, Math.min(1, (1 - this.flightProgress) / FLIGHT_TAPER_DISTANCE));
+      const taperFromStart = Math.max(FLIGHT_MIN_TAPER, Math.min(1, this.flightProgress / FLIGHT_TAPER_DISTANCE));
+      const desiredSpeed = FLIGHT_CRUISE_SPEED * Math.min(taperToEnd, taperFromStart);
+      this.flightSpeed += (desiredSpeed - this.flightSpeed) * dampFactor(FLIGHT_VELOCITY_HALF_LIFE_MS, time.delta);
+      this.flightProgress += this.flightSpeed * deltaSeconds;
+      if (this.flightProgress >= 1) {
+        this.flightProgress = 1;
+        this.flightState = 'holding';
+        this.flightHoldTimer = 0;
+      }
+    } else if (this.flightState === 'holding') {
+      this.flightSpeed = 0;
+      this.flightHoldTimer += time.delta;
+      if (this.flightHoldTimer >= FLIGHT_HOLD_DURATION_MS) {
+        this.flightState = 'resetting';
+      }
+    } else {
+      // 'resetting'
+      this.flightSpeed = 0;
+      this.flightProgress -= this.flightProgress * dampFactor(FLIGHT_RESET_HALF_LIFE_MS, time.delta);
+      if (this.flightProgress <= FLIGHT_RESET_SNAP_THRESHOLD) {
+        this.flightProgress = 0;
+        this.flightState = 'flying';
+      }
+    }
+
+    const sunlightTarget =
+      this.flightProgress > FLIGHT_SUNLIGHT_START
+        ? 1 + ((this.flightProgress - FLIGHT_SUNLIGHT_START) / (1 - FLIGHT_SUNLIGHT_START)) * (FLIGHT_SUNLIGHT_BOOST - 1)
+        : 1;
+    this.flightSunlightBoost +=
+      (sunlightTarget - this.flightSunlightBoost) * dampFactor(FLIGHT_SUNLIGHT_HALF_LIFE_MS, time.delta);
+    this.keyLight.intensity = this.baseKeyIntensity * this.activityWeight * this.flightSunlightBoost;
 
     // Position and orientation, sampled fresh from the curve every frame --
     // smooth by construction (no snapping), constant forward orientation,
