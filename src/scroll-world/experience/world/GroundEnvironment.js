@@ -63,6 +63,57 @@ const DOCK_CENTER_X = 2;
 const DOCK_CENTER_Z = -310;
 const CONTAINER_COLORS = [0x2f5fae, 0x8a3a2a, 0x3a6b4a];
 
+// Ground Chapter Cinematic Realism Pass, Commit 3: one operational cycle --
+// arrive -> queue -> dock-open -> unload -> dock-close -> depart -- rather
+// than several independent loops. Every phase boundary below is a target
+// change, not a hand-computed trajectory: the same damped-easing technique
+// already used everywhere else in this codebase (dampFactor toward a
+// target) naturally produces a smooth transition whenever a target
+// changes, so the choreography only needs to say *what* changes at each
+// boundary, not *how* to interpolate there.
+const DOCK_CYCLE_MS = 24000;
+// Phase boundaries, in ms into the cycle -- named constants rather than an
+// object/array literal so `phaseFor()` below (called every frame from
+// update()) does zero allocation, just numeric comparisons.
+const PHASE_ARRIVE_END = 4000;
+const PHASE_QUEUE_END = 6000;
+const PHASE_DOCK_OPEN_END = 8000;
+const PHASE_UNLOAD_END = 16000;
+const PHASE_DOCK_CLOSE_END = 18000;
+const PHASE_DEPART_END = 22000;
+// PHASE_DEPART_END..DOCK_CYCLE_MS is the closing "gap" beat.
+
+const DOCK_TRUCK_WAYPOINT_Z = DOCK_CENTER_Z + 14; // the existing dock spot
+const QUEUE_WAYPOINT_Z = DOCK_CENTER_Z + 30; // the existing queue spot
+const SPAWN_WAYPOINT_Z = DOCK_CENTER_Z + 55; // off-yard -- arrives from/departs to here
+const DOOR_CLOSED_Y = 2.5;
+const DOOR_OPEN_Y = 2.5 + 4.6;
+const DOCK_MOTION_HALF_LIFE_MS = 900;
+const PALLET_REVEAL_HALF_LIFE_MS = 350;
+
+// Forklift trip waypoints/periods -- module-scope constants (not built
+// inside update(), which would allocate every frame). Staggered periods
+// (2600ms / 3100ms) mean the two forklifts are never in lockstep.
+const FORKLIFT_DROP = { x: DOCK_CENTER_X + 2, z: DOCK_CENTER_Z - 3 };
+const FORKLIFT_PICKUP = { x: DOCK_CENTER_X - 3, z: DOCK_TRUCK_WAYPOINT_Z - 3 };
+const FORKLIFT_IDLE = [
+  { x: DOCK_CENTER_X + 1, z: DOCK_CENTER_Z + 2 },
+  { x: DOCK_CENTER_X + 4, z: DOCK_CENTER_Z + 6 },
+];
+const FORKLIFT_TRIP_PERIOD_MS = [2600, 3100];
+
+/** Zero-allocation phase lookup -- named numeric comparisons, not an
+ *  object/array iterated every frame. */
+function phaseFor(cycleT) {
+  if (cycleT < PHASE_ARRIVE_END) return 'arrive';
+  if (cycleT < PHASE_QUEUE_END) return 'queue';
+  if (cycleT < PHASE_DOCK_OPEN_END) return 'dockOpen';
+  if (cycleT < PHASE_UNLOAD_END) return 'unload';
+  if (cycleT < PHASE_DOCK_CLOSE_END) return 'dockClose';
+  if (cycleT < PHASE_DEPART_END) return 'depart';
+  return 'gap';
+}
+
 function createDockBuilding() {
   const group = new Group();
   const wallMaterial = new MeshStandardMaterial({ color: HUB_COLOR, roughness: 0.7, metalness: 0.2 });
@@ -558,6 +609,26 @@ export class GroundEnvironment {
     // detail -- markings/safety props around the dock/yard built above.
     this.group.add(createYardMarkings(), createYardSafety());
 
+    // Ground Chapter Cinematic Realism Pass, Commit 3: the choreography
+    // cycle's state (see update() for the full state machine). `dockTruck`/
+    // `queuedTruck` (built in Commit 1) swap roles once per cycle rather
+    // than being instantiated fresh -- "recycled from a small pool."
+    this.dockCyclePhase = 'gap';
+    this.dockTruck.userData.targetZ = this.dockTruck.position.z;
+    this.queuedTruck.userData.targetZ = this.queuedTruck.position.z;
+
+    // A third small vehicle for an independent reverse/return loop near the
+    // dock, deliberately never synced to the main cycle ("staggered
+    // timing"). Reuses createTruck() (the same rig the highway fleet and
+    // dock trucks already build) rather than a bespoke shape -- this
+    // chapter's existing vocabulary is already the right scale/silhouette
+    // for a yard service vehicle.
+    this.serviceVehicle = createTruck(0x1a2440, 60);
+    this.serviceVehicle.position.set(DOCK_CENTER_X + 9, 0, DOCK_CENTER_Z + 4);
+    this.serviceVehicle.rotation.y = Math.PI / 2;
+    this.serviceVehicle.userData.baseX = this.serviceVehicle.position.x;
+    this.group.add(this.serviceVehicle);
+
     // Heaviest ground-level haze in the journey (Section 23) -- the densest
     // particle field of any chapter so far.
     this.particles = createParticles({
@@ -619,7 +690,7 @@ export class GroundEnvironment {
     const deltaSeconds = time.delta / 1000;
     const halfLength = HIGHWAY_LENGTH / 2;
     const velocityT = dampFactor(VELOCITY_HALF_LIFE_MS, time.delta);
-    this.fleet.userData.trucks.forEach((truck) => {
+    this.fleet.userData.trucks.forEach((truck, truckIndex) => {
       const distanceToWrap =
         truck.userData.direction > 0 ? REGION_Z + halfLength - truck.position.z : truck.position.z - (REGION_Z - halfLength);
       const taper = Math.max(MIN_TAPER_FACTOR, Math.min(1, distanceToWrap / WRAP_TAPER_DISTANCE));
@@ -629,10 +700,108 @@ export class GroundEnvironment {
       truck.position.z += truck.userData.speed * truck.userData.direction * deltaSeconds;
       if (truck.position.z > REGION_Z + halfLength) truck.position.z = REGION_Z - halfLength;
       if (truck.position.z < REGION_Z - halfLength) truck.position.z = REGION_Z + halfLength;
+
+      // Ground Chapter Cinematic Realism Pass, Commit 3: additive refinement
+      // only -- the wrap/taper system above is untouched. A sub-millimeter,
+      // high-frequency sine reads as idle engine vibration; a brief pitch
+      // that grows as `taper` shrinks (i.e. exactly while the truck is
+      // decelerating into its wrap) reads as braking, then releases once
+      // taper recovers past the wrap.
+      truck.position.y = Math.sin(time.elapsed / 90 + truckIndex * 1.7) * 0.004;
+      truck.rotation.x = (1 - taper) * 0.05 * truck.userData.direction;
     });
 
     const pulse = 1 - 0.2 + 0.2 * Math.sin(time.elapsed / 3800);
     this.routeLine.material.opacity = this.routeLine.material.userData.baseOpacity * pulse;
+
+    this.updateDockCycle(time);
+  }
+
+  /** Ground Chapter Cinematic Realism Pass, Commit 3: the dock's single
+   *  operational cycle (arrive -> queue -> dock-open -> unload -> dock-
+   *  close -> depart -> gap), replacing what would otherwise be several
+   *  unrelated animation loops. Every moving part here is a target-plus-
+   *  damped-ease, the same convention already used throughout this
+   *  codebase -- no per-frame allocation, no new update loop (called from
+   *  update() above, which World.update() already calls once per frame). */
+  updateDockCycle(time) {
+    const cycleT = time.elapsed % DOCK_CYCLE_MS;
+    const phase = phaseFor(cycleT);
+    const motionT = dampFactor(DOCK_MOTION_HALF_LIFE_MS, time.delta);
+
+    // Role swap -- once, exactly on entering 'arrive' (not 'depart': the
+    // departing truck needs the whole depart+gap window to actually reach
+    // SPAWN_WAYPOINT_Z under its own unswapped label first, or swapping
+    // earlier would immediately reverse it mid-departure). By the time
+    // 'arrive' begins, the truck that was docked has already reached
+    // SPAWN -- swapping here means it picks up the *existing* "ease toward
+    // QUEUE unless phase is gap" target under its new queuedTruck label,
+    // which is exactly the arriving motion; the truck that was queued
+    // picks up "ease toward DOCK unless phase is depart/gap" under its new
+    // dockTruck label, which is exactly it pulling up to the dock. Not a
+    // new instantiation -- the same two rigs alternate roles every cycle
+    // ("recycled from a small pool").
+    if (phase === 'arrive' && this.dockCyclePhase !== 'arrive') {
+      const previousDock = this.dockTruck;
+      this.dockTruck = this.queuedTruck;
+      this.queuedTruck = previousDock;
+    }
+    this.dockCyclePhase = phase;
+
+    this.queuedTruck.userData.targetZ = phase === 'gap' ? SPAWN_WAYPOINT_Z : QUEUE_WAYPOINT_Z;
+    this.dockTruck.userData.targetZ = phase === 'depart' || phase === 'gap' ? SPAWN_WAYPOINT_Z : DOCK_TRUCK_WAYPOINT_Z;
+    this.dockTruck.position.z += (this.dockTruck.userData.targetZ - this.dockTruck.position.z) * motionT;
+    this.queuedTruck.position.z += (this.queuedTruck.userData.targetZ - this.queuedTruck.position.z) * motionT;
+
+    // Dock door: this is what its open/close easing is *for* -- not a
+    // standalone decorative loop.
+    const doorTargetY = phase === 'dockOpen' || phase === 'unload' ? DOOR_OPEN_Y : DOOR_CLOSED_Y;
+    this.dockDoor.position.y += (doorTargetY - this.dockDoor.position.y) * motionT;
+
+    // Pallet stack: each pallet reveals at its own threshold within the
+    // unload window -- a visibly growing stack, not an instant swap -- and
+    // resets once the cycle moves past it.
+    const unloadDuration = PHASE_UNLOAD_END - PHASE_DOCK_OPEN_END;
+    const isStacking = phase === 'unload' || phase === 'dockClose';
+    const palletT = dampFactor(PALLET_REVEAL_HALF_LIFE_MS, time.delta);
+    this.palletPool.forEach((pallet, i) => {
+      const revealAt = PHASE_DOCK_OPEN_END + (i / this.palletPool.length) * unloadDuration;
+      const targetScale = isStacking && cycleT >= revealAt ? 1 : 0;
+      pallet.scale.setScalar(pallet.scale.x + (targetScale - pallet.scale.x) * palletT);
+    });
+
+    // Forklifts: active only during 'unload', ferrying between the dock
+    // truck and the pallet stack on their own staggered trip periods (never
+    // synced to each other or to the main cycle) with a natural pause at
+    // each end -- the ease simply catches up before the trip phase moves
+    // past the hold window, no explicit "wait" state needed.
+    const unloadElapsed = cycleT - PHASE_DOCK_OPEN_END;
+    this.forklifts.forEach((forklift, i) => {
+      const idle = FORKLIFT_IDLE[i];
+      let targetX = idle.x;
+      let targetZ = idle.z;
+      if (phase === 'unload') {
+        const period = FORKLIFT_TRIP_PERIOD_MS[i];
+        const tripPhase = ((unloadElapsed + i * 900) % period) / period;
+        const atDrop = tripPhase < 0.5;
+        targetX = atDrop ? FORKLIFT_DROP.x : FORKLIFT_PICKUP.x;
+        targetZ = atDrop ? FORKLIFT_DROP.z : FORKLIFT_PICKUP.z;
+      }
+      const dz = targetZ - forklift.position.z;
+      forklift.position.x += (targetX - forklift.position.x) * motionT;
+      forklift.position.z += dz * motionT;
+      // A brief pitch proportional to remaining distance -- "leans while
+      // moving, levels out as it settles."
+      forklift.rotation.x = Math.max(-0.15, Math.min(0.15, dz * 0.02));
+      const forkGroup = forklift.userData.forkGroup;
+      forkGroup.rotation.x =
+        phase === 'unload' ? Math.sin(time.elapsed / 480 + i * 2) * 0.12 : forkGroup.rotation.x * (1 - motionT);
+    });
+
+    // Reversing service vehicle -- a short, continuous reverse/return loop
+    // on its own period, deliberately independent of the dock cycle above
+    // ("staggered timing," never one metronomic machine).
+    this.serviceVehicle.position.x = this.serviceVehicle.userData.baseX + Math.sin(time.elapsed / 3300) * 4;
   }
 
   setActivity(state) {
