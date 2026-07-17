@@ -188,6 +188,50 @@ function createDockBuilding() {
   return { group, door, platforms, containers };
 }
 
+/** Layered lighting fixtures (Commit 4) -- a floodlight and a softer
+ *  skylight under the canopy (distinct color temperatures, both small-
+ *  radius practicals following the same precedent Pickup's scanner light
+ *  and this file's own forklift beacons already set), emissive warehouse
+ *  window strips, and two ambient-motion props (a hanging cable, a small
+ *  pennant) whose sway is driven in update(). Positioned in the same
+ *  dock-local coordinate space createDockBuilding() uses (its own group is
+ *  offset to DOCK_CENTER_X/Z; this one is too, so the two line up). */
+function createDockLighting() {
+  const group = new Group();
+
+  const fixtureMaterial = new MeshStandardMaterial({ color: 0x0a0d1a, roughness: 0.5, metalness: 0.4 });
+  const floodFixture = new Mesh(new BoxGeometry(0.6, 0.2, 0.3), fixtureMaterial);
+  floodFixture.position.set(-3, 5.1, 6.8);
+  const floodlight = new PointLight(0xdce8ff, 2.2, 10, 2);
+  floodlight.position.set(-3, 4.9, 7);
+  group.add(floodFixture, floodlight);
+
+  const skylight = new PointLight(0xffd9a0, 0.9, 14, 1.5);
+  skylight.position.set(-3, 5.3, 5);
+  group.add(skylight);
+
+  const windowMaterial = new MeshBasicMaterial({ color: 0xbcd4ff, transparent: true, opacity: 0.85 });
+  const windows = [-5.5, -0.5].map((x) => {
+    const win = new Mesh(new BoxGeometry(1.6, 0.7, 0.08), windowMaterial.clone());
+    win.position.set(x, 6.2, 0.55);
+    group.add(win);
+    return win;
+  });
+
+  const cableMaterial = new MeshStandardMaterial({ color: 0x0a0d1a, roughness: 0.6, metalness: 0.3 });
+  const cable = new Mesh(new CylinderGeometry(0.03, 0.03, 1.4, 6), cableMaterial);
+  cable.position.set(1.5, 4.6, 7.3);
+  cable.geometry.translate(0, -0.7, 0); // pivot at the top end, for a pendulum sway
+  group.add(cable);
+
+  const pennant = new Mesh(new BoxGeometry(0.5, 0.35, 0.02), new MeshBasicMaterial({ color: ELECTRIC_400, transparent: true, opacity: 0.6 }));
+  pennant.position.set(6.5, 8.6, 0.6);
+  group.add(pennant);
+
+  group.position.set(DOCK_CENTER_X, 0, DOCK_CENTER_Z);
+  return { group, floodlight, skylight, windows, cable, pennant };
+}
+
 /** Abstract, textless wayfinding -- no font/texture pipeline exists in this
  *  codebase (every material anywhere is flat-color), so "signage" and
  *  "directional arrows" are real geometric shapes rather than legible
@@ -593,6 +637,20 @@ export class GroundEnvironment {
     this.group.add(dockBuilding.group);
     this.group.add(createYardSignage());
 
+    // Ground Chapter Cinematic Realism Pass, Commit 4: layered lighting +
+    // the two ambient-motion props (see update() for the sway/blink/
+    // rotation driving them).
+    const dockLighting = createDockLighting();
+    this.dockFloodlight = dockLighting.floodlight;
+    this.dockSkylight = dockLighting.skylight;
+    this.dockWindows = dockLighting.windows;
+    this.dockCable = dockLighting.cable;
+    this.dockPennant = dockLighting.pennant;
+    this.baseFloodlightIntensity = this.dockFloodlight.intensity;
+    this.baseSkylightIntensity = this.dockSkylight.intensity;
+    this.baseWindowOpacity = this.dockWindows[0].material.opacity;
+    this.group.add(dockLighting.group);
+
     const dockYard = createDockYard();
     this.dockTruck = dockYard.dockTruck;
     this.queuedTruck = dockYard.queuedTruck;
@@ -630,7 +688,10 @@ export class GroundEnvironment {
     this.group.add(this.serviceVehicle);
 
     // Heaviest ground-level haze in the journey (Section 23) -- the densest
-    // particle field of any chapter so far.
+    // particle field of any chapter so far. Ground Chapter Cinematic
+    // Realism Pass, Commit 4: opts into the turbulence layer built for
+    // this (Cinematic Polish Phase) for a general "light wind" read across
+    // the whole region -- previously unused here.
     this.particles = createParticles({
       count: 220,
       spreadX: 28,
@@ -638,8 +699,29 @@ export class GroundEnvironment {
       height: 5,
       offsetZ: REGION_Z,
       opacity: 0.4,
+      turbulence: 0.25,
     });
     this.group.add(this.particles);
+
+    // A small, sparse, slow-drifting tinted cluster near the dock roofline
+    // -- an approximation of exhaust/vent haze, not simulated smoke (no
+    // per-particle lifecycle fade exists in createParticles.js; building
+    // one would be a new rendering mechanism, out of scope here).
+    this.exhaustParticles = createParticles({
+      count: 16,
+      spreadX: 1,
+      spreadZ: 1,
+      height: 3,
+      offsetX: DOCK_CENTER_X + 5,
+      offsetZ: DOCK_CENTER_Z - 1,
+      driftSpeed: 0.12,
+      color: 0x9aa0b5,
+      size: 0.05,
+      opacity: 0.16,
+      turbulence: 0.3,
+    });
+    this.baseExhaustOpacity = this.exhaustParticles.material.opacity;
+    this.group.add(this.exhaustParticles);
 
     // Section 23: "Key light in electric blue, fill in the constant royal
     // blue."
@@ -681,11 +763,31 @@ export class GroundEnvironment {
     this.fillLight.intensity = this.baseFillIntensity * this.activityWeight;
     this.particles.material.opacity = this.baseParticleOpacity * this.activityWeight;
 
+    // Ground Chapter Cinematic Realism Pass, Commit 4: every new practical
+    // (dock floodlight/skylight/windows) recedes and returns together with
+    // the rest of the chapter's activity weight, exactly like the key/fill
+    // lights above -- never independently.
+    this.dockFloodlight.intensity = this.baseFloodlightIntensity * this.activityWeight;
+    this.dockSkylight.intensity = this.baseSkylightIntensity * this.activityWeight;
+    this.dockWindows.forEach((win) => {
+      win.material.opacity = this.baseWindowOpacity * this.activityWeight;
+    });
+    this.exhaustParticles.material.opacity = this.baseExhaustOpacity * this.activityWeight;
+
     const tintT = dampFactor(LIGHT_TINT_HALF_LIFE_MS, time.delta);
     this.keyLight.color.lerp(this.targetKeyColor, tintT);
     this.fillLight.color.lerp(this.targetFillColor, tintT);
 
-    updateParticles(this.particles, time.delta / 1000);
+    updateParticles(this.particles, time.delta / 1000, time.elapsed);
+    updateParticles(this.exhaustParticles, time.delta / 1000, time.elapsed);
+
+    // Ambient micro-motion (Commit 4): a hanging cable's pendulum sway and
+    // a small pennant's light sway -- distinct, independent periods from
+    // every other ambient touch in this chapter, so nothing pulses in
+    // lockstep.
+    this.dockCable.rotation.z = Math.sin(time.elapsed / 2600) * 0.05;
+    this.dockCable.rotation.x = Math.sin(time.elapsed / 3100 + 1) * 0.03;
+    this.dockPennant.rotation.y = Math.sin(time.elapsed / 1400) * 0.35;
 
     const deltaSeconds = time.delta / 1000;
     const halfLength = HIGHWAY_LENGTH / 2;
@@ -796,6 +898,14 @@ export class GroundEnvironment {
       const forkGroup = forklift.userData.forkGroup;
       forkGroup.rotation.x =
         phase === 'unload' ? Math.sin(time.elapsed / 480 + i * 2) * 0.12 : forkGroup.rotation.x * (1 - motionT);
+
+      // Ground Chapter Cinematic Realism Pass, Commit 4: beacon rotation
+      // (continuous) and blink (a distinct, unrelated period -- never
+      // synced to the rotation) tied to activityWeight like every other
+      // light in this chapter.
+      forklift.userData.beacon.rotation.y = time.elapsed / 260 + i * 3;
+      const blink = Math.sin(time.elapsed / 340 + i * 5) > 0.6 ? 1 : 0.25;
+      forklift.userData.beaconLight.intensity = 1.6 * blink * this.activityWeight;
     });
 
     // Reversing service vehicle -- a short, continuous reverse/return loop
