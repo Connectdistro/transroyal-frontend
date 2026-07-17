@@ -86,6 +86,19 @@ export function mountPointer(worldRoot, experience) {
       magnetY = rect.top + rect.height / 2;
       isMagnetized = true;
       follower.classList.add('cursor-follower--magnetized');
+
+      // Goal 8 micro-interaction, Commit 6: a hovered CTA's own region gets
+      // a small, one-time nudge on the exact same field scene-blend.js
+      // (Commit 1) already drives -- reused, not a parallel reactivity
+      // system. Safe by construction, not just by convention: it's a
+      // one-shot multiplicative bump capped at the system's own existing
+      // maximum (1), so it can never leave a region looking any different
+      // than "fully active" already does, and needs no separate decay/reset
+      // -- the common case (hovering a CTA in the already-active chapter)
+      // is a complete no-op since weight is already at that ceiling.
+      const sceneId = cta.closest('[data-scene-id]')?.dataset.sceneId;
+      const region = sceneId ? experience.world?.getRegion(sceneId) : null;
+      if (region) region.targetActivityWeight = Math.min(1, region.targetActivityWeight * 1.05);
     },
     true
   );
