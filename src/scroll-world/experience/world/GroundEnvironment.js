@@ -331,6 +331,30 @@ function createDockYard() {
   queuedTruck.rotation.y = Math.PI;
   group.add(dockTruck, queuedTruck);
 
+  // Logistics Choreography Phase, Commit 4: a small exhaust puff parented
+  // directly to each dock-area truck rig (not the fixed roofline haze
+  // above/elsewhere) -- Points inherit their parent's transform, so it
+  // follows the truck through arrive/depart for free, no position-
+  // tracking code. Opacity is driven in updateDockCycle(). Only the two
+  // dock-area rigs get one (they're the ones that meaningfully
+  // accelerate-away-from-a-stop; the highway fleet cruises continuously).
+  [dockTruck, queuedTruck].forEach((truck) => {
+    const exhaustPuff = createParticles({
+      count: 10,
+      spreadX: 0.4,
+      spreadZ: 0.4,
+      height: 1.4,
+      driftSpeed: 0.1,
+      color: 0x9aa0b5,
+      size: 0.04,
+      opacity: 0,
+      turbulence: 0.2,
+    });
+    exhaustPuff.position.set(1.3, 2.4, 4.4);
+    truck.add(exhaustPuff);
+    truck.userData.exhaustPuff = exhaustPuff;
+  });
+
   const palletBaseMaterial = new MeshStandardMaterial({ color: 0x5a4632, roughness: 0.85, metalness: 0 });
   const cargoMaterial = new MeshStandardMaterial({ color: 0x1a2148, roughness: 0.5, metalness: 0.15 });
   const palletPool = [];
@@ -1026,6 +1050,16 @@ export class GroundEnvironment {
     const queuedTruckDeltaZ = this.queuedTruck.userData.targetZ - this.queuedTruck.position.z;
     this.dockTruck.position.z += dockTruckDeltaZ * motionT;
     this.queuedTruck.position.z += queuedTruckDeltaZ * motionT;
+
+    // Logistics Choreography Phase, Commit 4: exhaust brightens briefly
+    // during arrive/depart (accelerating away from a stop), reusing the
+    // phase transitions already tracked above rather than a new signal.
+    const exhaustTargetOpacity = phase === 'arrive' || phase === 'depart' ? 0.22 : 0;
+    [this.dockTruck, this.queuedTruck].forEach((truck) => {
+      const puff = truck.userData.exhaustPuff;
+      puff.material.opacity += (exhaustTargetOpacity - puff.material.opacity) * motionT;
+      updateParticles(puff, time.delta / 1000, time.elapsed);
+    });
 
     // Logistics Choreography Phase, Commit 1: rolled by the actual applied
     // delta (post-motionT), not the raw distance-to-target.
