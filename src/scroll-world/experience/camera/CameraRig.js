@@ -226,6 +226,35 @@ export class CameraRig {
     this.cursorInfluence.set(Math.min(1, Math.max(-1, x)), Math.min(1, Math.max(-1, y)), 0);
   }
 
+  /**
+   * Choreography Refinement Pass: scene-blend.js's own entry point for
+   * camera position/target/fov during a chapter-transition corridor --
+   * called every tick with already shot-to-shot blended values it computes
+   * itself from SHOTS[] (public data; the blend math doesn't need to live
+   * in this class), the same "declare the value, let the rig apply it"
+   * shape setLightTint/setActivity already use elsewhere. Sets
+   * desiredPosition/desiredTarget/desiredFov directly -- update() already
+   * eases the live camera toward these every frame regardless of who set
+   * them, so this needs no separate easing path of its own.
+   *
+   * Deliberately does NOT touch activeShotId/activeDrift/settle-overshoot --
+   * those remain camera-sync.js's own discrete setShot()'s concern. Its
+   * calls keep firing exactly as before on every scene-state 'active'
+   * transition; they become harmless, immediately-superseded coarse
+   * nudges once this runs every tick, the same "continuous always wins"
+   * idiom scene-blend.js already established for fog/light-tint/activity
+   * (Cinematic Polish Phase, Commit 1) -- this closes the one gap that
+   * phase's own doc comment left as camera-sync.js's "later milestone":
+   * camera position/target now blend continuously across the same
+   * corridor those other properties already do, instead of snapping via a
+   * single fast eased setShot() once a chapter crosses into 'active'.
+   */
+  setCorridorBlend(position, target, fov) {
+    this.desiredPosition.copy(position);
+    this.desiredTarget.copy(target);
+    this.desiredFov = fov;
+  }
+
   /** Cinematic Motion Refinement Phase, Commit 1: a small, generic, opt-in
    *  lead offset on `target` only, eased via its own half-life in update()
    *  exactly like setCursorInfluence's `cursorOffset` -- clamped here so a

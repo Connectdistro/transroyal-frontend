@@ -1,4 +1,4 @@
-import { Color } from 'three';
+import { Color, Vector3 } from 'three';
 import { SCENES } from './config.js';
 import { SHOTS, LIGHT_TINTS } from './experience/camera/shots.js';
 
@@ -58,6 +58,14 @@ const scratchColorA = new Color();
 const scratchColorB = new Color();
 const scratchKey = new Color();
 const scratchFill = new Color();
+
+// Choreography Refinement Pass: scratch Vector3s for the camera position/
+// target blend below -- same zero-per-frame-allocation shape as the Color
+// scratches above.
+const scratchPosition = new Vector3();
+const scratchAdjacentPosition = new Vector3();
+const scratchTarget = new Vector3();
+const scratchAdjacentTarget = new Vector3();
 
 function resolveFog(sceneId) {
   return SHOTS[sceneId]?.fog ?? DEFAULT_FOG;
@@ -134,6 +142,35 @@ export function mountScrollBlend(worldRoot, experience) {
       const currentIntensity = resolveIntensity(currentId);
       const adjacentIntensity = adjacentId ? resolveIntensity(adjacentId) : currentIntensity;
       environment.setEnvironmentIntensity(currentIntensity + (adjacentIntensity - currentIntensity) * t);
+    }
+
+    // Choreography Refinement Pass: the one piece this phase's own doc
+    // comment (top of file) left as camera-sync.js's "later milestone" --
+    // camera position/target/fov now blend continuously across the exact
+    // same corridor as fog/light-tint above, computing lerp(current,
+    // adjacent, t) unconditionally every tick (not only while t > 0),
+    // which collapses to exactly the current shot's own resting values
+    // once t reaches 0 -- no separate restore branch, same reasoning the
+    // fog block above already documents. camera-sync.js's own discrete
+    // setShot() call keeps firing exactly as before on scene-state
+    // 'active'; it becomes a harmless, immediately-superseded coarse
+    // nudge once this runs every tick (CameraRig.setCorridorBlend()'s own
+    // doc has the full "continuous always wins" reasoning).
+    if (experience.camera) {
+      const currentShot = SHOTS[currentId];
+      if (currentShot) {
+        const adjacentShot = adjacentId ? SHOTS[adjacentId] : currentShot;
+        scratchPosition.set(currentShot.position.x, currentShot.position.y, currentShot.position.z);
+        scratchAdjacentPosition.set(adjacentShot.position.x, adjacentShot.position.y, adjacentShot.position.z);
+        scratchPosition.lerp(scratchAdjacentPosition, t);
+
+        scratchTarget.set(currentShot.target.x, currentShot.target.y, currentShot.target.z);
+        scratchAdjacentTarget.set(adjacentShot.target.x, adjacentShot.target.y, adjacentShot.target.z);
+        scratchTarget.lerp(scratchAdjacentTarget, t);
+
+        const fov = currentShot.fov + (adjacentShot.fov - currentShot.fov) * t;
+        experience.camera.setCorridorBlend(scratchPosition, scratchTarget, fov);
+      }
     }
 
     // Activity boost: additive on top of camera-sync.js's own continuously-
