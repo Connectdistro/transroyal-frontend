@@ -74,6 +74,12 @@ const FLIGHT_BANK_GAIN = 60;
 // with flightSpeed rather than sitting permanently at the clamp.
 const TARGET_LEAD_SCALE = 1;
 
+// Cinematic Motion Refinement Phase, Commit 3: the cargo pod lags the
+// aircraft's own bank angle, reading as the load swinging/settling under
+// the aircraft rather than being welded to it. A slower half-life than the
+// bank calculation's own instant application, so the pod visibly trails.
+const CARGO_SWAY_HALF_LIFE_MS = 380;
+
 // Loop behavior (Commit 4): a brief held arrival at the destination marker's
 // brightest, then an eased rewind back to 0 -- the same
 // dwell-then-transition idiom as Ground's dock cycle phases, just simpler
@@ -252,6 +258,7 @@ function createCargoAircraft() {
   group.add(cargoPod);
 
   group.userData.wings = wings;
+  group.userData.cargoPod = cargoPod;
   // Real cruising-altitude framing dwarfs a literal-scale fuselage against
   // the 340-unit landmass -- scaled up so the aircraft reads as the frame's
   // hero object (Section: camera stays put, "aircraft remains the hero"),
@@ -386,6 +393,7 @@ export class AirEnvironment {
     this.flightState = 'flying';
     this.flightHoldTimer = 0;
     this.flightSunlightBoost = 1;
+    this.cargoBankLag = 0;
     this.destinationBoost = 1;
 
     // Section 23: key electric blue, fill constant royal blue, "both read at
@@ -511,6 +519,18 @@ export class AirEnvironment {
     const bankSignal = scratchHeadingDelta.dot(scratchRight) * FLIGHT_BANK_GAIN;
     const bankAngle = Math.max(-FLIGHT_MAX_BANK, Math.min(FLIGHT_MAX_BANK, bankSignal));
     this.aircraft.rotateZ(-bankAngle);
+
+    // Cinematic Motion Refinement Phase, Commit 3: cargo pod independent
+    // sway -- cargoBankLag eases toward the current bankAngle on its own,
+    // slower half-life. The pod is a rigid child of the aircraft group, so
+    // giving it a local counter-rotation of (bankAngle - cargoBankLag) on
+    // top of the parent's own -bankAngle makes its WORLD roll equal
+    // -cargoBankLag instead -- the load visibly trailing the aircraft's
+    // own banking rather than welded to it, not a new mechanism, just a
+    // second eased copy of a value already computed above.
+    this.cargoBankLag += (bankAngle - this.cargoBankLag) * dampFactor(CARGO_SWAY_HALF_LIFE_MS, time.delta);
+    const cargoPod = this.aircraft.userData.cargoPod;
+    if (cargoPod) cargoPod.rotation.z = bankAngle - this.cargoBankLag;
 
     // Cinematic Motion Refinement Phase, Commit 1: a small lead on the
     // camera's own target, in the aircraft's current direction of travel,
