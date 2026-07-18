@@ -44,6 +44,26 @@ const PULSE_DEPTH = 0.22;
 const SCAN_PULSE_PERIOD = 2200;
 const SCAN_PULSE_DEPTH = 0.15;
 
+// Choreography Refinement Pass, Track A1: this chapter's decision moment --
+// "the driver accepts the shipment and closes the cargo door." Spends most
+// of a long, calm cycle OPEN (that's this chapter's own signature frame:
+// "van parked, cargo door open, package entering"), then closes slowly and
+// deliberately, matching this file's own documented pace ("nothing is
+// rushed... everything feels deliberate") -- a much longer cycle and a much
+// slower ease than Ground's dock door, which is a busy operational cycle by
+// contrast.
+const DOOR_CYCLE_MS = 42000;
+const DOOR_OPEN_PHASE_END = 34000;
+const DOOR_MOTION_HALF_LIFE_MS = 2200;
+const DOOR_CLOSED_Y = 1.5;
+const DOOR_OPEN_Y = 4.1;
+const PARCEL_REVEAL_HALF_LIFE_MS = 400;
+// The package only reads as "entering" while the door is genuinely open,
+// not mid-motion -- reuses the door's own live position rather than a
+// second timer, the same "one signal, two dependents" idiom the Sorting
+// diverter above uses for its arm/parcel.
+const PARCEL_VISIBLE_THRESHOLD = DOOR_CLOSED_Y + (DOOR_OPEN_Y - DOOR_CLOSED_Y) * 0.6;
+
 function createDockFloor() {
   const geometry = new BoxGeometry(34, 0.4, 30);
   const material = new MeshPhysicalMaterial({
@@ -166,7 +186,42 @@ function createVehicle() {
     group.add(head);
   });
 
+  // Track A1: a dark interior backdrop, fixed, revealed once the door
+  // above slides up -- the same recessed-dark-panel-behind-a-moving-door
+  // technique Ground's own dock door already uses.
+  const interior = new Mesh(new BoxGeometry(2.8, 2.4, 0.2), new MeshStandardMaterial({ color: 0x02030a, roughness: 0.9, metalness: 0 }));
+  interior.position.set(0, 1.6, -3.4);
+  group.add(interior);
+
+  // The rear cargo door -- split out from the cargo box's own rear face
+  // rather than fused into it, so it can slide independently. Rests at
+  // DOOR_OPEN_Y (see this file's own module-scope constants) so the
+  // chapter's own signature frame ("cargo door open") is the visual
+  // default; update() eases it toward DOOR_CLOSED_Y only during the
+  // decision-moment window.
+  const doorMaterial = bodyMaterial.clone();
+  const door = new Mesh(new BoxGeometry(3, 2.6, 0.15), doorMaterial);
+  door.position.set(0, DOOR_OPEN_Y, -3.32);
+  door.castShadow = true;
+  group.add(door);
+
+  // Track A1: the package "entering" -- CONTAINER_COLORS[0]'s own hex from
+  // GroundEnvironment.js, duplicated here rather than imported (sibling
+  // environment files stay independent, the same convention already
+  // established between Ground/Air/FinalMile) -- "the same shipment"
+  // echoed at its very first chapter. Scale-revealed only while the door
+  // reads as genuinely open, the same idiom Ground's pallet stack uses.
+  const parcel = new Mesh(new BoxGeometry(0.9, 0.7, 0.7), new MeshStandardMaterial({ color: 0x2f5fae, roughness: 0.5, metalness: 0.2 }));
+  parcel.position.set(0, 0.55, -2.6);
+  parcel.castShadow = true;
+  parcel.scale.setScalar(0);
+  group.add(parcel);
+
+  group.userData.door = door;
+  group.userData.parcel = parcel;
+
   group.position.set(9, 0, REGION_Z + 6);
+  group.userData.baseY = group.position.y;
   group.rotation.y = -0.35;
   return group;
 }
@@ -251,7 +306,8 @@ export class PickupEnvironment {
     this.scene = experience.scene.instance;
 
     this.group = new Group();
-    this.group.add(createDockFloor(), createDockWall(), createVehicle(), createDriver());
+    this.vehicle = createVehicle();
+    this.group.add(createDockFloor(), createDockWall(), this.vehicle, createDriver());
 
     const { group: scanGroup, light: scanLight } = createScanPractical();
     this.group.add(scanGroup, scanLight);
@@ -335,6 +391,23 @@ export class PickupEnvironment {
 
     const scanPulse = 1 - SCAN_PULSE_DEPTH + SCAN_PULSE_DEPTH * Math.sin((time.elapsed / SCAN_PULSE_PERIOD) * Math.PI * 2);
     this.scanLight.intensity = this.baseScanLightIntensity * this.activityWeight * scanPulse;
+
+    // Track A1: the vehicle's own idle vibration -- previously completely
+    // static, unlike every other populated chapter's vehicles. Position
+    // only (never rotation/target), the exact idiom Ground's own truck
+    // fleet already uses for "engine running, not moving."
+    this.vehicle.position.y = this.vehicle.userData.baseY + Math.sin(time.elapsed / 95) * 0.004;
+
+    const doorCycleT = time.elapsed % DOOR_CYCLE_MS;
+    const doorTargetY = doorCycleT < DOOR_OPEN_PHASE_END ? DOOR_OPEN_Y : DOOR_CLOSED_Y;
+    const doorMotionT = dampFactor(DOOR_MOTION_HALF_LIFE_MS, time.delta);
+    const door = this.vehicle.userData.door;
+    door.position.y += (doorTargetY - door.position.y) * doorMotionT;
+
+    const parcelTargetScale = door.position.y > PARCEL_VISIBLE_THRESHOLD ? 1 : 0;
+    const parcel = this.vehicle.userData.parcel;
+    const parcelT = dampFactor(PARCEL_REVEAL_HALF_LIFE_MS, time.delta);
+    parcel.scale.setScalar(parcel.scale.x + (parcelTargetScale - parcel.scale.x) * parcelT);
   }
 
   setActivity(state) {
