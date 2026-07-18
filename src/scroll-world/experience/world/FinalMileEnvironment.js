@@ -17,6 +17,7 @@ import { createLights } from './createLights.js';
 import { createParticles, updateParticles } from './createParticles.js';
 import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR, LIGHT_TINT_HALF_LIFE_MS } from '../utils/damp.js';
 import { LIGHT_TINTS } from '../camera/shots.js';
+import { varyMaterial } from './materialVariation.js';
 
 const STREET_COLOR = 0x070a26;
 const HOUSE_COLOR = 0x0a1030;
@@ -73,11 +74,18 @@ function createStreet() {
   return group;
 }
 
-function createHouse(x, z, scale) {
+function createHouse(x, z, scale, seed = 0) {
   const group = new Group();
   const bodyMaterial = new MeshStandardMaterial({ color: HOUSE_COLOR, roughness: 0.65, metalness: 0.2 });
   const roofMaterial = new MeshStandardMaterial({ color: 0x060814, roughness: 0.7, metalness: 0.15 });
   const windowMaterial = new MeshBasicMaterial({ color: WINDOW_COLOR, transparent: true, opacity: 0.55 });
+  // Choreography Refinement Pass: each house already gets its own fresh
+  // material instances (declared inside this per-call function, never
+  // shared across the five createHouses() calls) -- varyMaterial() just
+  // needed to actually be applied to them, closing the one gap in this
+  // chapter's own material-variation coverage.
+  varyMaterial(bodyMaterial, 900 + seed);
+  varyMaterial(roofMaterial, 920 + seed);
 
   const body = new Mesh(new BoxGeometry(4.5 * scale, 4 * scale, 5 * scale), bodyMaterial);
   body.position.y = 2 * scale;
@@ -113,13 +121,14 @@ function createHouses() {
     [13, REGION_Z - 14, 1],
     [13, REGION_Z - 32, 0.95],
   ];
-  positions.forEach(([x, z, scale]) => group.add(createHouse(x, z, scale)));
+  positions.forEach(([x, z, scale], i) => group.add(createHouse(x, z, scale, i)));
   return group;
 }
 
 function createVehicle() {
   const group = new Group();
   const bodyMaterial = new MeshStandardMaterial({ color: VEHICLE_COLOR, roughness: 0.4, metalness: 0.4 });
+  varyMaterial(bodyMaterial, 940);
   const rubberMaterial = new MeshStandardMaterial({ color: RUBBER_COLOR, roughness: 0.9, metalness: 0.1 });
   const lightMaterial = new MeshBasicMaterial({ color: ELECTRIC_400 });
 
@@ -153,6 +162,8 @@ function createFigure() {
   const group = new Group();
   const clothingMaterial = new MeshStandardMaterial({ color: 0x141a3a, roughness: 0.7, metalness: 0.1 });
   const skinMaterial = new MeshStandardMaterial({ color: SKIN_TONE, roughness: 0.6, metalness: 0 });
+  varyMaterial(clothingMaterial, 941);
+  varyMaterial(skinMaterial, 942);
 
   const body = new Mesh(new CapsuleGeometry(0.26, 1, 4, 8), clothingMaterial);
   body.position.y = 0.9;

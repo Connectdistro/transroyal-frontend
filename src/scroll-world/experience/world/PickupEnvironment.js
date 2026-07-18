@@ -17,6 +17,7 @@ import { createLights } from './createLights.js';
 import { createParticles, updateParticles } from './createParticles.js';
 import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR, LIGHT_TINT_HALF_LIFE_MS } from '../utils/damp.js';
 import { LIGHT_TINTS } from '../camera/shots.js';
+import { varyMaterial } from './materialVariation.js';
 
 const DOCK_COLOR = 0x080d33;
 const STRUCTURE_COLOR = 0x0a1030;
@@ -109,6 +110,12 @@ function createDockWall() {
 function createVehicle() {
   const group = new Group();
   const bodyMaterial = new MeshStandardMaterial({ color: VEHICLE_COLOR, roughness: 0.4, metalness: 0.4 });
+  // Choreography Refinement Pass: this chapter's own vehicle previously
+  // skipped the "no perfectly uniform materials" convention every other
+  // populated chapter already applies (Ground's trucks, Sorting's parcels,
+  // Air's fuselage) -- one instance, so a single fixed seed, not a
+  // per-loop index like those files' repeated elements.
+  varyMaterial(bodyMaterial, 800);
   const glassMaterial = new MeshPhysicalMaterial({
     color: ELECTRIC_500,
     transparent: true,
@@ -168,6 +175,8 @@ function createDriver() {
   const group = new Group();
   const clothingMaterial = new MeshStandardMaterial({ color: 0x141a3a, roughness: 0.7, metalness: 0.1 });
   const skinMaterial = new MeshStandardMaterial({ color: SKIN_TONE, roughness: 0.6, metalness: 0 });
+  varyMaterial(clothingMaterial, 801);
+  varyMaterial(skinMaterial, 802);
 
   const body = new Mesh(new CapsuleGeometry(0.28, 1.05, 4, 8), clothingMaterial);
   body.position.y = 0.93;
