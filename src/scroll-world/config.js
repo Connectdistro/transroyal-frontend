@@ -165,5 +165,11 @@ export const SCENES = [
     accent: '#2f8bff',
     cta: { label: 'Get in Touch', href: '#contact' },
     media: { still: null, video: null, mobileStill: null, mobileVideo: null },
+    // Track A6's own decision moment ("was the promise fulfilled?") --
+    // resolves from `from` to `to` as this scene becomes active, driven by
+    // status-badge.js off the same scene:state-change event every other
+    // per-scene lifecycle hook already uses. Optional field: any future
+    // scene can opt in the same way this one does, no template change.
+    statusTransition: { from: 'In Transit', to: 'Delivered' },
   },
 ];

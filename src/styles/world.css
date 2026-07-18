@@ -403,6 +403,31 @@
     max-width: 640px;
   }
 
+  /* Track A6: a status pill, same visual language as .scene__proof-points
+     below (glass pill, subtle border) so it reads as part of the existing
+     system rather than a new component -- swaps text/color once its own
+     scene reports 'active' (status-badge.js), a resting-to-resolved beat
+     with no motion of its own beyond the color/border transition. */
+  .scene__status-badge {
+    display: inline-block;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    background: var(--surface-glass);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 6px 12px;
+    margin-bottom: 14px;
+    transition: color 600ms ease, border-color 600ms ease, background-color 600ms ease;
+  }
+
+  .scene__status-badge--resolved {
+    color: var(--accent-strong);
+    border-color: var(--accent-strong);
+    background: color-mix(in srgb, var(--accent-strong) 12%, transparent);
+  }
+
   .scene--hero h1 {
     /* Rebuilt against the approved design reference (reference/*.png): a
        lighter weight than base.css's global h1 600 reads as considered and

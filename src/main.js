@@ -16,6 +16,7 @@ import { mountCameraSync } from './scroll-world/camera-sync.js';
 import { mountScrollProgress } from './scroll-world/scroll-progress.js';
 import { mountScrollBlend } from './scroll-world/scene-blend.js';
 import { mountScenePreload } from './scroll-world/scene-preload.js';
+import { mountStatusBadge } from './scroll-world/status-badge.js';
 import { mountScrollNav } from './scroll-world/scroll-nav.js';
 import { mountPointer } from './scroll-world/pointer.js';
 import { mountNav } from './components/nav.js';
@@ -141,6 +142,17 @@ function renderCta(cta) {
   return `<a class="scene__cta" href="${cta.href}">${cta.label}</a>`;
 }
 
+/** Track A6: an optional per-scene status pill (config-only opt-in via
+ *  `scene.statusTransition` -- today only Delivered's own entry has one).
+ *  Renders showing `from`; status-badge.js flips it to `to` once this
+ *  scene's own scene:state-change reports 'active', reusing the exact
+ *  lifecycle event every other per-scene hook in this codebase already
+ *  listens for rather than a new signal. */
+function renderStatusBadge(statusTransition) {
+  if (!statusTransition) return '';
+  return `<p class="scene__status-badge" data-status-badge data-status-from="${statusTransition.from}" data-status-to="${statusTransition.to}">${statusTransition.from}</p>`;
+}
+
 /**
  * One reusable scene template for all seven scenes — narrative-only, service/capability,
  * stat-bearing, and CTA-bearing scenes are all the same markup shape, differing only in
@@ -184,6 +196,7 @@ function renderScene(scene, isHero) {
       ${renderSceneArt(scene, isHero)}
       <div class="scene__copy">
         <p class="scene__eyebrow">${scene.eyebrow}</p>
+        ${renderStatusBadge(scene.statusTransition)}
         <${HeadingTag} id="scene-${scene.id}-title"${headingAriaLabel}>${headingContent}</${HeadingTag}>
         <p class="scene__body">${scene.body}</p>
         ${renderProofPoints(scene.proofPoints)}
@@ -231,4 +244,5 @@ mountScrollProgress(document.querySelector('#world'), experience);
 mountScrollBlend(document.querySelector('#world'), experience);
 mountPointer(document.querySelector('#world'), experience);
 mountScenePreload(document.querySelector('#world'));
+mountStatusBadge(document.querySelector('#world'));
 mountFooter(document.querySelector('#footer-root'));
