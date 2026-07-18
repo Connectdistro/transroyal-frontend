@@ -67,6 +67,13 @@ const FLIGHT_BANK_LOOK_AHEAD = 0.02;
 const FLIGHT_MAX_BANK = (22 * Math.PI) / 180;
 const FLIGHT_BANK_GAIN = 60;
 
+// Cinematic Motion Refinement Phase, Commit 1: how far (world units, at
+// full cruise speed) the camera's target leads the aircraft's own current
+// heading -- CameraRig.setTargetLead() clamps to its own smaller ceiling
+// regardless, this just sets the design intent so the lead visibly breathes
+// with flightSpeed rather than sitting permanently at the clamp.
+const TARGET_LEAD_SCALE = 1;
+
 // Loop behavior (Commit 4): a brief held arrival at the destination marker's
 // brightest, then an eased rewind back to 0 -- the same
 // dwell-then-transition idiom as Ground's dock cycle phases, just simpler
@@ -504,6 +511,23 @@ export class AirEnvironment {
     const bankSignal = scratchHeadingDelta.dot(scratchRight) * FLIGHT_BANK_GAIN;
     const bankAngle = Math.max(-FLIGHT_MAX_BANK, Math.min(FLIGHT_MAX_BANK, bankSignal));
     this.aircraft.rotateZ(-bankAngle);
+
+    // Cinematic Motion Refinement Phase, Commit 1: a small lead on the
+    // camera's own target, in the aircraft's current direction of travel,
+    // scaled by how fast it's actually moving -- near-zero during
+    // hold/reset, full during cruise. Reuses scratchTangentNow (already
+    // unit-length, untouched since line above) and the existing
+    // flightSpeed -- no new allocation. CameraRig only actually applies
+    // this while the `air` shot is the camera's active one (see
+    // setTargetLead's own guard), so it's inert whenever another chapter
+    // is on screen.
+    const leadMagnitude = TARGET_LEAD_SCALE * Math.min(1, this.flightSpeed / FLIGHT_CRUISE_SPEED);
+    this.experience.camera.setTargetLead(
+      'air',
+      scratchTangentNow.x * leadMagnitude,
+      scratchTangentNow.y * leadMagnitude,
+      scratchTangentNow.z * leadMagnitude
+    );
 
     // Lightweight atmosphere: sub-degree wingtip flex and pitch/roll jitter
     // read as engine vibration, recomputed fresh each frame on top of the

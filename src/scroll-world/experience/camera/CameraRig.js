@@ -27,6 +27,27 @@ const DRIFT_PERIOD_MS = 5000;
 const CURSOR_HALF_LIFE_MS = 180;
 const CURSOR_AMPLITUDE = 0.15;
 
+// Cinematic Motion Refinement Phase, Commit 1: settle-overshoot, a fourth
+// additive layer alongside drift/cursor -- armed only on a non-instant
+// setShot() call to a genuinely new shot, it lets the camera slightly
+// overshoot in the direction it was already moving, then swing back and
+// settle, right as a new shot begins. Bounded (clamped below drift's own
+// default amplitude) and self-terminating (decays via half-life, no
+// persistent state once settled) -- never touches desiredPosition, so it
+// can't alter a shot's authored composition, only decorate the approach
+// to it.
+const SETTLE_HALF_LIFE_MS = 260;
+const SETTLE_PERIOD_MS = 420;
+const SETTLE_MAX_AMPLITUDE = 0.22;
+
+// Cinematic Motion Refinement Phase, Commit 1: subject lead, a small,
+// generic, opt-in offset on `target` only -- same eased/clamped shape as
+// cursor parallax. No region calls this by default; AirEnvironment.js
+// wires it for its own aircraft (the one chapter genuinely built around
+// tracking a single moving subject). Never touches desiredTarget.
+const TARGET_LEAD_HALF_LIFE_MS = 220;
+const TARGET_LEAD_MAX_AMPLITUDE = 1.2;
+
 // Module-scope scratch vectors for the camera-relative right/up basis
 // cursor parallax needs -- allocated once, reused every frame (zero
 // per-frame allocation). Safe as module scope since CameraRig is a
@@ -36,6 +57,7 @@ const UNIT_X = new Vector3(1, 0, 0);
 const UNIT_Y = new Vector3(0, 1, 0);
 const scratchRight = new Vector3();
 const scratchUp = new Vector3();
+const scratchOldDesiredPosition = new Vector3();
 
 /** Merges a shot's optional `drift` fields over DEFAULT_DRIFT (per-field,
  *  not all-or-nothing) and normalizes `axis` to a unit Vector3 once --
@@ -113,6 +135,18 @@ export class CameraRig {
     this.cursorInfluence = new Vector3();
     this.cursorOffset = new Vector3();
 
+    // Cinematic Motion Refinement Phase, Commit 1: settle-overshoot state.
+    // `settleElapsed` starts at Infinity so the envelope (2 ** -elapsed/half)
+    // is already 0 before any shot change ever arms it -- no separate
+    // "armed" flag needed.
+    this.settleImpulse = new Vector3();
+    this.settleElapsed = Infinity;
+
+    // Subject-lead state (target-only), same eased-offset shape as cursor
+    // parallax above.
+    this.targetLeadTarget = new Vector3();
+    this.targetLeadOffset = new Vector3();
+
     this.setShot(DEFAULT_SHOT_ID);
   }
 
@@ -128,12 +162,25 @@ export class CameraRig {
     const shot = SHOTS[shotId];
     if (!shot) return;
 
+    // Settle-overshoot only makes sense on a genuinely new, eased shot
+    // change -- re-selecting the same shot, or any instant snap (the
+    // constructor's own initial shot, or any future instant re-frame), has
+    // no meaningful "previous shot" to overshoot away from. Captured before
+    // desiredPosition is overwritten below.
+    const arm = instant === false && shotId !== this.activeShotId;
+    if (arm) scratchOldDesiredPosition.copy(this.desiredPosition);
+
     this.activeShotId = shotId;
     this.desiredPosition.set(shot.position.x, shot.position.y, shot.position.z);
     this.desiredTarget.set(shot.target.x, shot.target.y, shot.target.z);
     this.desiredFov = shot.fov;
     // Resolved once per shot change, not per frame -- see resolveDrift().
     this.activeDrift = resolveDrift(shot.drift);
+
+    if (arm) {
+      this.settleImpulse.subVectors(this.desiredPosition, scratchOldDesiredPosition).clampLength(0, SETTLE_MAX_AMPLITUDE);
+      this.settleElapsed = 0;
+    }
 
     // Clip planes are a technical bound, not a cinematic parameter -- they
     // apply immediately regardless of `instant`, never eased like fov.
@@ -177,6 +224,27 @@ export class CameraRig {
    *  second easing pipeline needed here. */
   setCursorInfluence(x, y) {
     this.cursorInfluence.set(Math.min(1, Math.max(-1, x)), Math.min(1, Math.max(-1, y)), 0);
+  }
+
+  /** Cinematic Motion Refinement Phase, Commit 1: a small, generic, opt-in
+   *  lead offset on `target` only, eased via its own half-life in update()
+   *  exactly like setCursorInfluence's `cursorOffset` -- clamped here so a
+   *  careless caller can never push the frame far off its authored
+   *  composition. Takes the caller's OWN shot id (not read from rig state
+   *  by the caller) and only actually applies it while that shot is the
+   *  rig's active one -- every region updates every frame regardless of
+   *  visibility (the persistent scene graph), so without this guard a
+   *  chapter calling this while off-screen would leak its lead into
+   *  whichever OTHER shot the camera is actually showing. Same
+   *  declare-intent-let-the-rig-decide shape as setActivity/setLightTint
+   *  elsewhere in the codebase, rather than a region reaching into rig
+   *  internals to check relevance itself. */
+  setTargetLead(shotId, x, y, z) {
+    if (shotId !== this.activeShotId) {
+      this.targetLeadTarget.set(0, 0, 0);
+      return;
+    }
+    this.targetLeadTarget.set(x, y, z).clampLength(0, TARGET_LEAD_MAX_AMPLITUDE);
   }
 
   /**
@@ -232,6 +300,31 @@ export class CameraRig {
     this.cursorOffset.lerp(this.cursorInfluence, cursorT);
     this.instance.position.addScaledVector(scratchRight, this.cursorOffset.x * CURSOR_AMPLITUDE);
     this.instance.position.addScaledVector(scratchUp, -this.cursorOffset.y * CURSOR_AMPLITUDE);
+
+    // Settle-overshoot (Commit 1): a fourth additive offset, armed only by
+    // a non-instant setShot() to a genuinely new shot (see setShot() above).
+    // `settleElapsed` grows unboundedly once armed -- 2 ** (-elapsed/half)
+    // simply asymptotes to 0, no reset/rearm bookkeeping needed between
+    // shot changes. Guarded on the envelope BEFORE computing the
+    // oscillation: settleElapsed starts at Infinity (never armed yet), and
+    // Math.cos(Infinity) is NaN in JS -- multiplying by a zero envelope
+    // does NOT save it (0 * NaN = NaN, not 0), which would otherwise
+    // permanently corrupt `position` on the very first frame, before any
+    // shot ever changes. Skipping the block entirely while the envelope is
+    // already negligible avoids ever evaluating Math.cos(Infinity).
+    this.settleElapsed += dt;
+    const settleEnvelope = 2 ** (-this.settleElapsed / SETTLE_HALF_LIFE_MS);
+    if (settleEnvelope > 0.0005) {
+      const settleOscillation = Math.cos((this.settleElapsed / SETTLE_PERIOD_MS) * Math.PI * 2);
+      this.instance.position.addScaledVector(this.settleImpulse, settleEnvelope * settleOscillation);
+    }
+
+    // Subject lead (Commit 1): target-only, eased the same way cursor
+    // parallax is above. Zero for every chapter that never calls
+    // setTargetLead() -- targetLeadTarget simply stays (0,0,0).
+    const leadT = dampFactor(TARGET_LEAD_HALF_LIFE_MS, dt);
+    this.targetLeadOffset.lerp(this.targetLeadTarget, leadT);
+    this.target.add(this.targetLeadOffset);
 
     this.applyLookAt();
   }
