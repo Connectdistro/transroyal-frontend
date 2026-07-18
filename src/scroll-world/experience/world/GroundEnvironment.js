@@ -96,6 +96,12 @@ const DOOR_OPEN_Y = 2.5 + 4.6;
 const DOCK_MOTION_HALF_LIFE_MS = 900;
 const PALLET_REVEAL_HALF_LIFE_MS = 350;
 
+// Logistics Choreography Phase, Commit 1: matches each wheel's own
+// CylinderGeometry radius exactly (createTruck/createForklift), used to
+// convert an actual per-frame position delta into a roll angle.
+const TRUCK_WHEEL_RADIUS = 0.5;
+const FORKLIFT_WHEEL_RADIUS = 0.32;
+
 // Cinematic Motion Refinement Phase, Commit 2: load-settle bounce -- the
 // same decaying-oscillation shape as the camera's own settle-overshoot
 // (Commit 1), duplicated locally since each pallet needs its own
@@ -115,6 +121,20 @@ const FORKLIFT_IDLE = [
   { x: DOCK_CENTER_X + 4, z: DOCK_CENTER_Z + 6 },
 ];
 const FORKLIFT_TRIP_PERIOD_MS = [2600, 3100];
+
+/** Logistics Choreography Phase, Commit 1: rolls a vehicle's wheel meshes
+ *  by the arc-length equivalent of how far it actually moved this frame --
+ *  reuses each vehicle's own already-computed per-frame position delta
+ *  (however it was produced: eased target, taper, sine) rather than a
+ *  separate velocity/speed system, so it stays correct regardless of the
+ *  motion technique behind it. Zero allocation -- forEach over an
+ *  already-built array. */
+function rollWheels(wheels, deltaDistance, radius) {
+  const deltaAngle = deltaDistance / radius;
+  wheels.forEach((wheel) => {
+    wheel.rotation.x += deltaAngle;
+  });
+}
 
 /** Zero-allocation phase lookup -- named numeric comparisons, not an
  *  object/array iterated every frame. */
@@ -366,14 +386,17 @@ function createForklift(seed) {
   group.add(forkGroup);
 
   const wheelGeometry = new CylinderGeometry(0.32, 0.32, 0.3, 12);
+  const wheels = [];
   [-0.9, 0.9].forEach((z) => {
     [-0.55, 0.55].forEach((x) => {
       const wheel = new Mesh(wheelGeometry, darkMaterial);
       wheel.rotation.z = Math.PI / 2;
       wheel.position.set(x, 0.32, z);
       group.add(wheel);
+      wheels.push(wheel);
     });
   });
+  group.userData.wheels = wheels;
 
   const beacon = new Mesh(new SphereGeometry(0.12, 8, 8), new MeshBasicMaterial({ color: 0xffaa33 }));
   beacon.position.set(0, 2.0, -0.5);
@@ -462,14 +485,20 @@ function createTruck(color, seed = 0) {
   group.add(cab);
 
   const wheelGeometry = new CylinderGeometry(0.5, 0.5, 0.4, 14);
+  const wheels = [];
   [-4.5, -1.5, 1.5, 4.5].forEach((z) => {
     [-1.6, 1.6].forEach((x) => {
       const wheel = new Mesh(wheelGeometry, rubberMaterial);
       wheel.rotation.z = Math.PI / 2;
       wheel.position.set(x, 0.5, z);
       group.add(wheel);
+      wheels.push(wheel);
     });
   });
+  // Logistics Choreography Phase, Commit 1: stored so update()/
+  // updateDockCycle() can roll them proportional to actual per-frame
+  // movement -- previously built and positioned, then discarded.
+  group.userData.wheels = wheels;
 
   [-1.4, 1.4].forEach((x) => {
     const tail = new Mesh(new BoxGeometry(0.15, 0.25, 0.05), lightMaterial);
@@ -858,9 +887,15 @@ export class GroundEnvironment {
       const desiredSpeed = truck.userData.targetSpeed * taper;
       truck.userData.speed += (desiredSpeed - truck.userData.speed) * velocityT;
 
-      truck.position.z += truck.userData.speed * truck.userData.direction * deltaSeconds;
+      const truckDeltaZ = truck.userData.speed * truck.userData.direction * deltaSeconds;
+      truck.position.z += truckDeltaZ;
       if (truck.position.z > REGION_Z + halfLength) truck.position.z = REGION_Z - halfLength;
       if (truck.position.z < REGION_Z - halfLength) truck.position.z = REGION_Z + halfLength;
+
+      // Logistics Choreography Phase, Commit 1: rolled by the pre-wrap
+      // delta specifically -- the wrap itself is a teleport back to the
+      // opposite end, not real movement, and shouldn't spike the wheels.
+      rollWheels(truck.userData.wheels, truckDeltaZ, TRUCK_WHEEL_RADIUS);
 
       // Ground Chapter Cinematic Realism Pass, Commit 3: additive refinement
       // only -- the wrap/taper system above is untouched. A sub-millimeter,
@@ -932,6 +967,11 @@ export class GroundEnvironment {
     this.dockTruck.position.z += dockTruckDeltaZ * motionT;
     this.queuedTruck.position.z += queuedTruckDeltaZ * motionT;
 
+    // Logistics Choreography Phase, Commit 1: rolled by the actual applied
+    // delta (post-motionT), not the raw distance-to-target.
+    rollWheels(this.dockTruck.userData.wheels, dockTruckDeltaZ * motionT, TRUCK_WHEEL_RADIUS);
+    rollWheels(this.queuedTruck.userData.wheels, queuedTruckDeltaZ * motionT, TRUCK_WHEEL_RADIUS);
+
     // Cinematic Motion Refinement Phase, Commit 2: "steering correction" --
     // a small roll proportional to remaining distance to target, the same
     // leans-while-moving/levels-out-as-it-settles idiom the forklifts below
@@ -1002,11 +1042,18 @@ export class GroundEnvironment {
         targetZ = atDrop ? FORKLIFT_DROP.z : FORKLIFT_PICKUP.z;
       }
       const dz = targetZ - forklift.position.z;
-      forklift.position.x += (targetX - forklift.position.x) * motionT;
+      const dx = targetX - forklift.position.x;
+      forklift.position.x += dx * motionT;
       forklift.position.z += dz * motionT;
       // A brief pitch proportional to remaining distance -- "leans while
       // moving, levels out as it settles."
       forklift.rotation.x = Math.max(-0.15, Math.min(0.15, dz * 0.02));
+
+      // Logistics Choreography Phase, Commit 1: rolled by the combined
+      // X/Z movement magnitude this frame (forklifts move diagonally,
+      // unlike trucks) -- a plain untextured wheel shows no visual
+      // difference for direction of spin, so magnitude alone is enough.
+      rollWheels(forklift.userData.wheels, Math.hypot(dx, dz) * motionT, FORKLIFT_WHEEL_RADIUS);
       const forkGroup = forklift.userData.forkGroup;
       forkGroup.rotation.x =
         phase === 'unload' ? Math.sin(time.elapsed / 480 + i * 2) * 0.12 : forkGroup.rotation.x * (1 - motionT);
@@ -1038,7 +1085,15 @@ export class GroundEnvironment {
       this.dispatchGroundEvent('ground:vehicle-reverse');
     }
     this.serviceVehicle.userData.lastDirection = serviceDirection;
+    const previousServiceX = this.serviceVehicle.position.x;
     this.serviceVehicle.position.x = this.serviceVehicle.userData.baseX + Math.sin(time.elapsed / 3300) * 4;
+
+    // Logistics Choreography Phase, Commit 1: this vehicle travels along X
+    // (unlike every other truck, which travels along Z), so its wheels'
+    // construction-time orientation doesn't literally match its direction
+    // of travel -- immaterial for a plain untextured cylinder with no
+    // tread to betray the mismatch, so the same helper still applies.
+    rollWheels(this.serviceVehicle.userData.wheels, this.serviceVehicle.position.x - previousServiceX, TRUCK_WHEEL_RADIUS);
   }
 
   setActivity(state) {
