@@ -48,6 +48,35 @@ const VELOCITY_HALF_LIFE_MS = 250;
 const TAPER_DISTANCE = CONVEYOR_LENGTH * 0.12;
 const MIN_TAPER_FACTOR = 0.2;
 
+// Choreography Refinement Pass, Track A2: the chapter's decision moment --
+// "the network makes the right routing decision," not just moves boxes.
+// One parcel on the middle lane (CONVEYOR_X[1] = 0) diverts onto a short
+// spur every lap; every other parcel on every other lane is untouched.
+// Picking a fixed lane/parcel (rather than randomizing) gives the eye a
+// repeatable pattern to follow, matching this chapter's own already-
+// deterministic (seeded, not Math.random()) motion conventions.
+const DIVERTER_LINE_INDEX = 1;
+const DIVERTER_PARCEL_LOCAL_INDEX = 0;
+// A junction past the belt's own midpoint (REGION_Z), so the diverted
+// parcel has real travel distance on the spur before it reaches endZ and
+// resets -- verified against createConveyors()'s own parcel z range
+// (REGION_Z +/- CONVEYOR_LENGTH/2).
+const DIVERTER_Z = REGION_Z + 8;
+// How close (world Z) the target parcel needs to be to the junction before
+// the arm swings out / the parcel starts diverting -- reused as BOTH
+// triggers (Ground's own precedent: reuse one computed proximity value
+// rather than a second timer), so the arm is physically swinging exactly
+// while the parcel is crossing it, not decoupled from what it's gating.
+const DIVERTER_TRIGGER_WINDOW = 3;
+const DIVERTER_OFFSET_X = 2.3;
+const DIVERTER_MOTION_HALF_LIFE_MS = 260;
+// The paddle's two resting rotations, not a small flex angle -- retracted
+// points it along Z (parallel to travel, tucked outside the belt's own
+// x-span so it never occludes an undiverted parcel), deployed swings it a
+// full quarter-turn to lie across the belt.
+const DIVERTER_ARM_RETRACTED_Y = Math.PI / 2;
+const DIVERTER_ARM_DEPLOYED_Y = 0;
+
 function createMezzanineFloor() {
   const geometry = new BoxGeometry(30, 0.4, CONVEYOR_LENGTH + 6);
   const material = new MeshPhysicalMaterial({ color: FLOOR_COLOR, metalness: 0.1, roughness: 0.8, clearcoat: 0 });
@@ -143,6 +172,42 @@ function createConveyors() {
   return group;
 }
 
+/** The diverter -- a pivoting paddle at the junction (hinged so rotating
+ *  the group swings the panel across the belt rather than spinning around
+ *  its own center, the same technique AirEnvironment.js's flap groups
+ *  already use) plus a short spur belt the diverted parcel actually
+ *  travels along, so the divert reads as "onto a real path" rather than a
+ *  parcel floating sideways over bare floor. */
+function createDiverter() {
+  const group = new Group();
+  const laneX = CONVEYOR_X[DIVERTER_LINE_INDEX];
+
+  const armMaterial = new MeshStandardMaterial({ color: ROYAL_500, roughness: 0.4, metalness: 0.5 });
+  const armPivot = new Group();
+  armPivot.position.set(laneX - 1.3, 0.55, DIVERTER_Z);
+  // Retracted at rest -- Math.PI/2 points the arm along Z (parallel to
+  // travel, tucked outside the belt's own x-span), so undiverted parcels
+  // pass it freely. update() swings this toward 0 (across the belt) only
+  // while the target parcel is actually crossing the junction.
+  armPivot.rotation.y = DIVERTER_ARM_RETRACTED_Y;
+  const arm = new Mesh(new BoxGeometry(1.9, 0.12, 0.25), armMaterial);
+  arm.position.set(0.95, 0, 0);
+  arm.castShadow = true;
+  armPivot.add(arm);
+  group.add(armPivot);
+
+  const spurMaterial = new MeshStandardMaterial({ color: BELT_COLOR, roughness: 0.4, metalness: 0.5 });
+  const spurLength = 5;
+  const spur = new Mesh(new BoxGeometry(spurLength, 0.3, 2.2), spurMaterial);
+  spur.rotation.y = -Math.PI / 5;
+  spur.position.set(laneX + DIVERTER_OFFSET_X * 0.55, 0.15, DIVERTER_Z + 2.8);
+  spur.receiveShadow = true;
+  group.add(spur);
+
+  group.userData.armPivot = armPivot;
+  return group;
+}
+
 function createRouteLine() {
   // Continues from Pickup's own end point (see PickupEnvironment.js) through
   // Sorting's region -- Section 23: the parcel rejoins the flow of the
@@ -173,8 +238,20 @@ export class SortingEnvironment {
     this.group = new Group();
     this.arches = createScanArches();
     this.conveyors = createConveyors();
+    this.diverter = createDiverter();
     this.routeLine = createRouteLine();
-    this.group.add(createMezzanineFloor(), this.arches, this.conveyors, this.routeLine);
+    this.group.add(createMezzanineFloor(), this.arches, this.conveyors, this.diverter, this.routeLine);
+
+    // Track A2's own decision-moment target: the one parcel that diverts
+    // every lap (see DIVERTER_LINE_INDEX/DIVERTER_PARCEL_LOCAL_INDEX above).
+    // Indexed directly rather than searched for every frame -- parcels are
+    // pushed in createConveyors() in (line, then p) order, matching this
+    // same arithmetic.
+    this.diverterParcel =
+      this.conveyors.userData.parcels[DIVERTER_LINE_INDEX * 4 + DIVERTER_PARCEL_LOCAL_INDEX];
+    this.diverterParcel.userData.baseX = this.diverterParcel.position.x;
+    this.diverterParcel.userData.diverted = false;
+    this.diverterArmDeploy = 0;
 
     this.particles = createParticles({
       count: 160,
@@ -250,8 +327,33 @@ export class SortingEnvironment {
         // it accelerates back up from the belt's start rather than
         // snapping straight to full speed.
         parcel.userData.speed = PARCEL_SPEED * MIN_TAPER_FACTOR;
+        // Track A2: the diverted parcel un-diverts exactly at its own lap
+        // reset, the same "explicit reset at the boundary" shape the
+        // pallet-settle bounce elsewhere in this codebase already uses.
+        if (parcel === this.diverterParcel) parcel.userData.diverted = false;
       }
     });
+
+    // Track A2: the diverter's decision moment. The paddle only swings
+    // out for a brief symmetric window AROUND the junction (a real sorter
+    // arm redirects a box, then retracts -- it doesn't stay deployed for
+    // the box's whole remaining trip); the parcel's own sideways offset
+    // LATCHES on once it enters that window and stays diverted for the
+    // rest of the lap, reset only at the wrap above. Two different
+    // lifetimes sharing one proximity computation, not two independent
+    // signals.
+    const diverterMotionT = dampFactor(DIVERTER_MOTION_HALF_LIFE_MS, time.delta);
+    const distanceToJunction = this.diverterParcel.position.z - DIVERTER_Z;
+    const armActive = Math.abs(distanceToJunction) < DIVERTER_TRIGGER_WINDOW;
+    if (distanceToJunction > -DIVERTER_TRIGGER_WINDOW) this.diverterParcel.userData.diverted = true;
+
+    this.diverterArmDeploy += ((armActive ? 1 : 0) - this.diverterArmDeploy) * diverterMotionT;
+    this.diverter.userData.armPivot.rotation.y =
+      DIVERTER_ARM_RETRACTED_Y + (DIVERTER_ARM_DEPLOYED_Y - DIVERTER_ARM_RETRACTED_Y) * this.diverterArmDeploy;
+
+    const targetOffsetX = this.diverterParcel.userData.diverted ? DIVERTER_OFFSET_X : 0;
+    const baseX = this.diverterParcel.userData.baseX;
+    this.diverterParcel.position.x += (baseX + targetOffsetX - this.diverterParcel.position.x) * diverterMotionT;
 
     const pulse = 1 - PULSE_DEPTH + PULSE_DEPTH * Math.sin((time.elapsed / PULSE_PERIOD) * Math.PI * 2);
     this.routeLine.material.opacity = this.routeLine.material.userData.baseOpacity * pulse;
