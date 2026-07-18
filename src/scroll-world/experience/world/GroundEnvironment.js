@@ -96,6 +96,15 @@ const DOOR_OPEN_Y = 2.5 + 4.6;
 const DOCK_MOTION_HALF_LIFE_MS = 900;
 const PALLET_REVEAL_HALF_LIFE_MS = 350;
 
+// Cinematic Motion Refinement Phase, Commit 2: load-settle bounce -- the
+// same decaying-oscillation shape as the camera's own settle-overshoot
+// (Commit 1), duplicated locally since each pallet needs its own
+// independent timer (matching this codebase's own per-file-duplication
+// convention rather than extracting a shared utility for six meshes).
+const PALLET_SETTLE_HALF_LIFE_MS = 180;
+const PALLET_SETTLE_PERIOD_MS = 260;
+const PALLET_SETTLE_AMPLITUDE = 0.08;
+
 // Forklift trip waypoints/periods -- module-scope constants (not built
 // inside update(), which would allocate every frame). Staggered periods
 // (2600ms / 3100ms) mean the two forklifts are never in lockstep.
@@ -373,6 +382,7 @@ function createForklift(seed) {
   group.add(beacon, beaconLight);
 
   group.userData.forkGroup = forkGroup;
+  group.userData.mast = mast;
   group.userData.beacon = beacon;
   group.userData.beaconLight = beaconLight;
   return group;
@@ -860,6 +870,12 @@ export class GroundEnvironment {
       // taper recovers past the wrap.
       truck.position.y = Math.sin(time.elapsed / 90 + truckIndex * 1.7) * 0.004;
       truck.rotation.x = (1 - taper) * 0.05 * truck.userData.direction;
+
+      // Cinematic Motion Refinement Phase, Commit 2: a small persistent
+      // body-roll, independent period from both the idle-vibration bounce
+      // above and the braking pitch -- reads as a loaded truck settling
+      // side-to-side at cruise, not synced to anything else in this file.
+      truck.rotation.z = Math.sin(time.elapsed / 1750 + truckIndex * 2.3) * 0.012;
     });
 
     const pulse = 1 - 0.2 + 0.2 * Math.sin(time.elapsed / 3800);
@@ -911,8 +927,17 @@ export class GroundEnvironment {
 
     this.queuedTruck.userData.targetZ = phase === 'gap' ? SPAWN_WAYPOINT_Z : QUEUE_WAYPOINT_Z;
     this.dockTruck.userData.targetZ = phase === 'depart' || phase === 'gap' ? SPAWN_WAYPOINT_Z : DOCK_TRUCK_WAYPOINT_Z;
-    this.dockTruck.position.z += (this.dockTruck.userData.targetZ - this.dockTruck.position.z) * motionT;
-    this.queuedTruck.position.z += (this.queuedTruck.userData.targetZ - this.queuedTruck.position.z) * motionT;
+    const dockTruckDeltaZ = this.dockTruck.userData.targetZ - this.dockTruck.position.z;
+    const queuedTruckDeltaZ = this.queuedTruck.userData.targetZ - this.queuedTruck.position.z;
+    this.dockTruck.position.z += dockTruckDeltaZ * motionT;
+    this.queuedTruck.position.z += queuedTruckDeltaZ * motionT;
+
+    // Cinematic Motion Refinement Phase, Commit 2: "steering correction" --
+    // a small roll proportional to remaining distance to target, the same
+    // leans-while-moving/levels-out-as-it-settles idiom the forklifts below
+    // already use for their own pitch.
+    this.dockTruck.rotation.z = Math.max(-0.03, Math.min(0.03, dockTruckDeltaZ * 0.01));
+    this.queuedTruck.rotation.z = Math.max(-0.03, Math.min(0.03, queuedTruckDeltaZ * 0.01));
 
     // Dock door: this is what its open/close easing is *for* -- not a
     // standalone decorative loop.
@@ -928,7 +953,35 @@ export class GroundEnvironment {
     this.palletPool.forEach((pallet, i) => {
       const revealAt = PHASE_DOCK_OPEN_END + (i / this.palletPool.length) * unloadDuration;
       const targetScale = isStacking && cycleT >= revealAt ? 1 : 0;
-      pallet.scale.setScalar(pallet.scale.x + (targetScale - pallet.scale.x) * palletT);
+      const previousScale = pallet.scale.x;
+      const nextScale = previousScale + (targetScale - previousScale) * palletT;
+      pallet.scale.setScalar(nextScale);
+
+      // Cinematic Motion Refinement Phase, Commit 2: load-settle bounce --
+      // once a pallet's reveal crosses ~90% on its way UP, arm one brief
+      // decaying overshoot on top of its scale ("follow-through," not a new
+      // mechanism -- the same settle-envelope shape introduced for the
+      // camera in Commit 1). Never arms on the way down (targetScale === 0
+      // is an intentional disappear at cycle reset, not an arrival).
+      // `settleElapsed` is left `undefined` (not Infinity) while inert, so
+      // the block below is skipped entirely rather than ever evaluating
+      // Math.cos on a runaway value -- the same NaN trap Commit 1 hit.
+      if (targetScale === 1 && previousScale < 0.9 && nextScale >= 0.9 && !pallet.userData.settled) {
+        pallet.userData.settleElapsed = 0;
+        pallet.userData.settled = true;
+      }
+      if (targetScale === 0) pallet.userData.settled = false;
+
+      if (pallet.userData.settleElapsed !== undefined) {
+        pallet.userData.settleElapsed += time.delta;
+        const settleEnvelope = 2 ** (-pallet.userData.settleElapsed / PALLET_SETTLE_HALF_LIFE_MS);
+        if (settleEnvelope > 0.0005) {
+          const settleOscillation = Math.cos((pallet.userData.settleElapsed / PALLET_SETTLE_PERIOD_MS) * Math.PI * 2);
+          pallet.scale.setScalar(nextScale + settleEnvelope * settleOscillation * PALLET_SETTLE_AMPLITUDE);
+        } else {
+          pallet.userData.settleElapsed = undefined;
+        }
+      }
     });
 
     // Forklifts: active only during 'unload', ferrying between the dock
@@ -957,6 +1010,13 @@ export class GroundEnvironment {
       const forkGroup = forklift.userData.forkGroup;
       forkGroup.rotation.x =
         phase === 'unload' ? Math.sin(time.elapsed / 480 + i * 2) * 0.12 : forkGroup.rotation.x * (1 - motionT);
+
+      // Cinematic Motion Refinement Phase, Commit 2: mast sway -- until now
+      // only the fork-tine group (above) had any motion; the mast itself
+      // was rigid. Sub-degree ambient sway, same ceiling as Air's own
+      // wingtip jitter, ever-present (not gated to 'unload').
+      const mast = forklift.userData.mast;
+      if (mast) mast.rotation.z = Math.sin(time.elapsed / 580 + i * 2.3) * 0.01;
 
       // Ground Chapter Cinematic Realism Pass, Commit 4: beacon rotation
       // (continuous) and blink (a distinct, unrelated period -- never
