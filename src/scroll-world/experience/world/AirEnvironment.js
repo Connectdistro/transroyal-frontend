@@ -121,6 +121,21 @@ const FLAP_HALF_LIFE_MS = 500;
 const ROTATION_PITCH_MAX = (6 * Math.PI) / 180;
 const ROTATION_PITCH_WINDOW = 0.06;
 
+// Logistics Choreography Phase, Commit 6: aircraft-mounted lights and
+// engine glow. Standard aviation nav-light convention: red on the left
+// wingtip, green on the right (facing forward, -Z).
+const NAV_LIGHT_RED = 0xff3b30;
+const NAV_LIGHT_GREEN = 0x30d158;
+const BEACON_COLOR = 0xff3b30;
+const BEACON_BLINK_PERIOD_MS = 900;
+const BEACON_BASE_INTENSITY = 1.4;
+const TAXI_LIGHT_COLOR = 0xfff2d0;
+const TAXI_LIGHT_WINDOW = 0.05;
+const TAXI_LIGHT_HALF_LIFE_MS = 500;
+const TAXI_LIGHT_BASE_INTENSITY = 2.2;
+const ENGINE_GLOW_COLOR = 0xffb347;
+const ENGINE_GLOW_MAX_OPACITY = 0.7;
+
 // Module-scope scratch vectors, reused every frame (never reallocated) as
 // `optionalTarget` args to Curve.getPointAt()/getTangentAt() -- Goal 9's
 // zero-per-frame-allocation rule.
@@ -285,6 +300,20 @@ function createCargoAircraft() {
   wings.position.set(0, -0.3, 0.5);
   group.add(wings);
 
+  // Logistics Choreography Phase, Commit 6: nav lights at the wingtips --
+  // standard aviation convention, red on the left (-X, facing forward
+  // -Z), green on the right. Always on, small emissive spheres (no
+  // PointLight needed -- these are meant to read as tiny colored points,
+  // not illuminate anything).
+  [
+    [-12, NAV_LIGHT_RED],
+    [12, NAV_LIGHT_GREEN],
+  ].forEach(([x, color]) => {
+    const navLight = new Mesh(new SphereGeometry(0.18, 8, 8), new MeshBasicMaterial({ color }));
+    navLight.position.set(x, -0.3, 0.5);
+    group.add(navLight);
+  });
+
   const tailVertical = new Mesh(new BoxGeometry(0.3, 3, 2.4), wingMaterial);
   tailVertical.position.set(0, 2.3, 7.2);
   const tailHorizontal = new Mesh(new BoxGeometry(7.5, 0.3, 1.8), wingMaterial);
@@ -292,11 +321,23 @@ function createCargoAircraft() {
   group.add(tailVertical, tailHorizontal);
 
   const engineGeometry = new CylinderGeometry(0.6, 0.6, 2.6, 10);
+  // Logistics Choreography Phase, Commit 6: a small emissive disc at each
+  // engine's rear (the aft/exhaust end, local +Z), brightness scaling
+  // with flightSpeed in update() -- a cheap "thrust response" cue reusing
+  // a value already computed every frame, no new state.
+  const engineGlowMaterial = new MeshBasicMaterial({ color: ENGINE_GLOW_COLOR, transparent: true, opacity: 0 });
+  const engineGlows = [];
   [-6, 6].forEach((x) => {
     const engine = new Mesh(engineGeometry, wingMaterial);
     engine.rotation.x = Math.PI / 2;
     engine.position.set(x, -1, 0.6);
     group.add(engine);
+
+    const glow = new Mesh(new CylinderGeometry(0.45, 0.45, 0.05, 10), engineGlowMaterial);
+    glow.rotation.x = Math.PI / 2;
+    glow.position.set(x, -1, 1.95);
+    group.add(glow);
+    engineGlows.push(glow);
   });
 
   const cargoPodMaterial = new MeshStandardMaterial({ color: CARGO_POD_COLOR, roughness: 0.5, metalness: 0.3 });
@@ -323,10 +364,28 @@ function createCargoAircraft() {
   gear.scale.setScalar(0);
   group.add(gear);
 
+  // Logistics Choreography Phase, Commit 6: anti-collision beacon (small
+  // blinking PointLight, fuselage top, continuous blink independent of
+  // flight phase -- same idiom as Ground's own forklift beacons) and a
+  // taxi/landing light (brightness ramped in update() during the low-
+  // altitude departure/approach windows, dim at cruise).
+  const beacon = new Mesh(new SphereGeometry(0.14, 8, 8), new MeshBasicMaterial({ color: BEACON_COLOR }));
+  beacon.position.set(0, 1.75, 2);
+  const beaconLight = new PointLight(BEACON_COLOR, 0, 4, 2);
+  beaconLight.position.copy(beacon.position);
+  group.add(beacon, beaconLight);
+
+  const taxiLight = new PointLight(TAXI_LIGHT_COLOR, 0, 6, 2);
+  taxiLight.position.set(0, -0.5, -9.8);
+  group.add(taxiLight);
+
   group.userData.wings = wings;
   group.userData.cargoPod = cargoPod;
   group.userData.flapGroups = flapGroups;
   group.userData.gear = gear;
+  group.userData.engineGlowMaterial = engineGlowMaterial;
+  group.userData.beaconLight = beaconLight;
+  group.userData.taxiLight = taxiLight;
   // Real cruising-altitude framing dwarfs a literal-scale fuselage against
   // the 340-unit landmass -- scaled up so the aircraft reads as the frame's
   // hero object (Section: camera stays put, "aircraft remains the hero"),
@@ -467,6 +526,7 @@ export class AirEnvironment {
     this.destinationBoost = 1;
     this.gearScale = 0;
     this.flapAngle = 0;
+    this.taxiLightIntensity = 0;
 
     // Section 23: key electric blue, fill constant royal blue, "both read at
     // greater distance and softer falloff than any other chapter."
@@ -656,6 +716,24 @@ export class AirEnvironment {
     this.aircraft.userData.flapGroups.forEach((flapGroup) => {
       flapGroup.rotation.x = this.flapAngle;
     });
+
+    // Logistics Choreography Phase, Commit 6: anti-collision beacon
+    // (always blinking, independent of flight phase -- same idiom as
+    // Ground's own forklift beacons), taxi/landing light (reuses the same
+    // low-progress departure/approach window idiom as gear/flaps above),
+    // and engine glow (brightness tracks flightSpeed directly, already
+    // computed this frame for the curve-follow taper -- a cheap "thrust
+    // response" cue, no new state).
+    const beaconBlink = Math.sin((time.elapsed / BEACON_BLINK_PERIOD_MS) * Math.PI * 2) > 0.5 ? 1 : 0;
+    this.aircraft.userData.beaconLight.intensity = BEACON_BASE_INTENSITY * beaconBlink * this.activityWeight;
+
+    const taxiLightTarget =
+      this.flightProgress < TAXI_LIGHT_WINDOW || this.flightProgress > 1 - TAXI_LIGHT_WINDOW ? TAXI_LIGHT_BASE_INTENSITY : 0;
+    this.taxiLightIntensity += (taxiLightTarget - this.taxiLightIntensity) * dampFactor(TAXI_LIGHT_HALF_LIFE_MS, time.delta);
+    this.aircraft.userData.taxiLight.intensity = this.taxiLightIntensity * this.activityWeight;
+
+    this.aircraft.userData.engineGlowMaterial.opacity =
+      ENGINE_GLOW_MAX_OPACITY * Math.min(1, this.flightSpeed / FLIGHT_CRUISE_SPEED);
 
     const revealIndices = Math.floor(
       (this.deliveryThread.indexCount * this.flightProgress) / THREAD_INDICES_PER_RING
