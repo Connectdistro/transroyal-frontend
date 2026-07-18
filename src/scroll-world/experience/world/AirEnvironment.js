@@ -107,6 +107,20 @@ const FLIGHT_SUNLIGHT_START = 0.75;
 const FLIGHT_SUNLIGHT_BOOST = 1.35;
 const FLIGHT_SUNLIGHT_HALF_LIFE_MS = 1200;
 
+// Logistics Choreography Phase, Commit 5: gear/flap staging and a liftoff
+// "rotation" pitch. Confirmed with the user: the Air chapter's shot and
+// flight path stay true-aerial-altitude only (no literal runway) -- these
+// simulate the departure/arrival story beats via simple progress-threshold
+// visibility/angle targets (the same idiom the destination marker's
+// approach ramp already uses), not a literal ground sequence.
+const GEAR_EXTENDED_WINDOW = 0.05;
+const GEAR_HALF_LIFE_MS = 500;
+const FLAP_DEPLOY_WINDOW = 0.08;
+const FLAP_MAX_ANGLE = (18 * Math.PI) / 180;
+const FLAP_HALF_LIFE_MS = 500;
+const ROTATION_PITCH_MAX = (6 * Math.PI) / 180;
+const ROTATION_PITCH_WINDOW = 0.06;
+
 // Module-scope scratch vectors, reused every frame (never reallocated) as
 // `optionalTarget` args to Curve.getPointAt()/getTangentAt() -- Goal 9's
 // zero-per-frame-allocation rule.
@@ -220,6 +234,31 @@ function createFlightPath() {
   return new CatmullRomCurve3(FLIGHT_WAYPOINTS.map(([x, y, z]) => new Vector3(x, y, z)));
 }
 
+/** Logistics Choreography Phase, Commit 5: small strut+wheel landing
+ *  gear, extended (scale 1) near departure/arrival and retracted (scale
+ *  0) through cruise -- implies "just left/about to touch down" without
+ *  the chapter ever depicting a literal runway (see this file's own
+ *  altitude-only design intent). */
+function createLandingGear() {
+  const group = new Group();
+  const strutMaterial = new MeshStandardMaterial({ color: ENGINE_COLOR, roughness: 0.5, metalness: 0.5 });
+  const wheelMaterial = new MeshStandardMaterial({ color: 0x14181f, roughness: 0.7, metalness: 0.2 });
+  const legs = [
+    [0, -2.4, -7], // nose gear
+    [-2.6, -2.6, 1], // left main gear
+    [2.6, -2.6, 1], // right main gear
+  ];
+  legs.forEach(([x, y, z]) => {
+    const strut = new Mesh(new CylinderGeometry(0.08, 0.08, 1.2, 6), strutMaterial);
+    strut.position.set(x, y + 0.6, z);
+    const wheel = new Mesh(new CylinderGeometry(0.35, 0.35, 0.25, 10), wheelMaterial);
+    wheel.rotation.z = Math.PI / 2;
+    wheel.position.set(x, y, z);
+    group.add(strut, wheel);
+  });
+  return group;
+}
+
 /** A simple, legible cargo aircraft from the same flat-color primitive
  *  vocabulary every other chapter already uses -- built along the local
  *  -Z axis (nose at -Z) specifically so Object3D.lookAt() orients it
@@ -266,8 +305,28 @@ function createCargoAircraft() {
   cargoPod.position.set(0, -2.1, -1);
   group.add(cargoPod);
 
+  // Logistics Choreography Phase, Commit 5: trailing-edge flaps, one per
+  // side, each in its own small pivot group so rotating the group droops
+  // the flap mesh down/back from its leading (hinge) edge rather than
+  // spinning around its own center.
+  const flapGroups = [-8, 8].map((x) => {
+    const flapGroup = new Group();
+    flapGroup.position.set(x, -0.3, 2.2);
+    const flap = new Mesh(new BoxGeometry(6, 0.12, 1.4), wingMaterial);
+    flap.position.set(0, 0, 0.7);
+    flapGroup.add(flap);
+    group.add(flapGroup);
+    return flapGroup;
+  });
+
+  const gear = createLandingGear();
+  gear.scale.setScalar(0);
+  group.add(gear);
+
   group.userData.wings = wings;
   group.userData.cargoPod = cargoPod;
+  group.userData.flapGroups = flapGroups;
+  group.userData.gear = gear;
   // Real cruising-altitude framing dwarfs a literal-scale fuselage against
   // the 340-unit landmass -- scaled up so the aircraft reads as the frame's
   // hero object (Section: camera stays put, "aircraft remains the hero"),
@@ -406,6 +465,8 @@ export class AirEnvironment {
     this.neighborBoost = 0;
     this.neighborBoostTarget = 0;
     this.destinationBoost = 1;
+    this.gearScale = 0;
+    this.flapAngle = 0;
 
     // Section 23: key electric blue, fill constant royal blue, "both read at
     // greater distance and softer falloff than any other chapter."
@@ -568,6 +629,33 @@ export class AirEnvironment {
     if (wings) wings.rotation.z = Math.sin(time.elapsed / 260) * 0.01;
     this.aircraft.rotateX(Math.sin(time.elapsed / 340 + 2) * 0.0015);
     this.aircraft.rotateZ(Math.sin(time.elapsed / 410 + 4) * 0.001);
+
+    // Logistics Choreography Phase, Commit 5: a brief "rotation" pitch
+    // bias right at departure, layered additively via rotateX (same
+    // technique as the wingtip jitter above), active only in the first
+    // sliver of flightProgress and easing out as the climb settles into
+    // its own curve-derived pitch -- a distinct "liftoff" read without
+    // touching the flight-path curve itself. Positive rotateX pitches the
+    // nose (local -Z) upward.
+    const rotationEnvelope = Math.max(0, 1 - this.flightProgress / ROTATION_PITCH_WINDOW);
+    this.aircraft.rotateX(rotationEnvelope * ROTATION_PITCH_MAX);
+
+    // Gear and flaps: extended/deployed near departure and arrival,
+    // retracted/flat through cruise -- a pure function of the current
+    // flightProgress (same idiom as the destination marker's approach
+    // ramp below), so it responds correctly whether progress is
+    // currently increasing ('flying') or decreasing ('resetting').
+    const gearTarget =
+      this.flightProgress < GEAR_EXTENDED_WINDOW || this.flightProgress > 1 - GEAR_EXTENDED_WINDOW ? 1 : 0;
+    this.gearScale += (gearTarget - this.gearScale) * dampFactor(GEAR_HALF_LIFE_MS, time.delta);
+    this.aircraft.userData.gear.scale.setScalar(this.gearScale);
+
+    const flapTarget =
+      this.flightProgress < FLAP_DEPLOY_WINDOW || this.flightProgress > 1 - FLAP_DEPLOY_WINDOW ? FLAP_MAX_ANGLE : 0;
+    this.flapAngle += (flapTarget - this.flapAngle) * dampFactor(FLAP_HALF_LIFE_MS, time.delta);
+    this.aircraft.userData.flapGroups.forEach((flapGroup) => {
+      flapGroup.rotation.x = this.flapAngle;
+    });
 
     const revealIndices = Math.floor(
       (this.deliveryThread.indexCount * this.flightProgress) / THREAD_INDICES_PER_RING
