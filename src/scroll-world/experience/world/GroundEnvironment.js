@@ -152,6 +152,23 @@ const FORKLIFT_TRIP_PERIOD_MS = [2600, 3100];
 // y=1.45; forks start at local y=0.25, so 0.6 lift tops out around y=0.85).
 const FORKLIFT_LIFT_HEIGHT = 0.6;
 
+// Choreography Refinement Pass, Track A3 Pass 1: the "coordination" decision
+// moment -- one forklift carries a pallet from the stack to the departing
+// truck, closing the one gap in an otherwise fully-choreographed dock cycle
+// (forklifts previously only ever moved cargo FROM the truck TO the stack,
+// never the outbound leg). Reuses FORKLIFT_DROP/FORKLIFT_PICKUP verbatim as
+// the two waypoints, just reversed -- the stack (FORKLIFT_DROP) is this
+// trip's own source, the truck-side spot (FORKLIFT_PICKUP) is its
+// destination, no new positions needed. Window sits entirely inside
+// dockClose/early depart, well clear of the unload window it follows.
+const LOADOUT_WINDOW_START = PHASE_UNLOAD_END;
+const LOADOUT_WINDOW_END = PHASE_DEPART_END - 2000;
+const LOADOUT_MIDPOINT = LOADOUT_WINDOW_START + (LOADOUT_WINDOW_END - LOADOUT_WINDOW_START) * 0.5;
+// Only the first forklift performs this trip -- one clear actor for a
+// single decision beat reads better than two forklifts converging on the
+// same truck at once.
+const LOADOUT_FORKLIFT_INDEX = 0;
+
 /** Logistics Choreography Phase, Commit 1: rolls a vehicle's wheel meshes
  *  by the arc-length equivalent of how far it actually moved this frame --
  *  reuses each vehicle's own already-computed per-frame position delta
@@ -1234,12 +1251,23 @@ export class GroundEnvironment {
       let targetX = idle.x;
       let targetZ = idle.z;
       let atDrop = false;
+      let loadoutCarrying = false;
+      const inLoadoutWindow =
+        i === LOADOUT_FORKLIFT_INDEX && cycleT >= LOADOUT_WINDOW_START && cycleT < LOADOUT_WINDOW_END;
       if (phase === 'unload') {
         const period = FORKLIFT_TRIP_PERIOD_MS[i];
         const tripPhase = ((unloadElapsed + i * 900) % period) / period;
         atDrop = tripPhase < 0.5;
         targetX = atDrop ? FORKLIFT_DROP.x : FORKLIFT_PICKUP.x;
         targetZ = atDrop ? FORKLIFT_DROP.z : FORKLIFT_PICKUP.z;
+      } else if (inLoadoutWindow) {
+        // One-shot, not a repeating trip like the unload loop above: first
+        // leg fetches the pallet from the stack (FORKLIFT_DROP), second leg
+        // carries it to the truck (FORKLIFT_PICKUP) -- see this file's own
+        // LOADOUT_* constants for the full rationale.
+        loadoutCarrying = cycleT >= LOADOUT_MIDPOINT;
+        targetX = loadoutCarrying ? FORKLIFT_PICKUP.x : FORKLIFT_DROP.x;
+        targetZ = loadoutCarrying ? FORKLIFT_PICKUP.z : FORKLIFT_DROP.z;
       }
       const dz = targetZ - forklift.position.z;
       const dx = targetX - forklift.position.x;
@@ -1265,12 +1293,17 @@ export class GroundEnvironment {
       // echo Air's own cargo pod already uses) reveals in step via a scale
       // ease, the same idiom the pallet stack already uses, so the forklift
       // visibly IS carrying something rather than just tilting its tines.
+      // Track A3 Pass 1: `carrying` covers both trips this forklift can be
+      // mid-flight on -- the repeating unload trip (atDrop) and the one-shot
+      // loadout trip (loadoutCarrying) -- so the lift/cargo-box logic below
+      // doesn't need to know which one is actually driving it.
+      const carrying = (phase === 'unload' && atDrop) || loadoutCarrying;
       const forkGroup = forklift.userData.forkGroup;
-      const forkHeightTarget = phase === 'unload' && atDrop ? FORKLIFT_LIFT_HEIGHT : 0;
+      const forkHeightTarget = carrying ? FORKLIFT_LIFT_HEIGHT : 0;
       forkGroup.position.y += (forkHeightTarget - forkGroup.position.y) * motionT;
       const cargoBox = forklift.userData.cargoBox;
       if (cargoBox) {
-        const cargoTargetScale = phase === 'unload' && atDrop ? 1 : 0;
+        const cargoTargetScale = carrying ? 1 : 0;
         cargoBox.scale.setScalar(cargoBox.scale.x + (cargoTargetScale - cargoBox.scale.x) * motionT);
       }
 
