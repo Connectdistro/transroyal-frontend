@@ -80,6 +80,15 @@ const TARGET_LEAD_SCALE = 1;
 // bank calculation's own instant application, so the pod visibly trails.
 const CARGO_SWAY_HALF_LIFE_MS = 380;
 
+// Cinematic Motion Refinement Phase, Commit 4: cross-chapter continuity.
+// scene-blend.js's corridor loop calls setNeighborInfluence() every tick
+// for every region that defines it -- eases the destination marker's
+// prominence up a little ahead of the actual shot cut while entering from
+// `ground` (the shipment's own departure point), and a smaller settle cue
+// while leaving toward `final-mile`.
+const NEIGHBOR_BOOST_HALF_LIFE_MS = 500;
+const NEIGHBOR_PROMINENCE_SCALE = 0.35;
+
 // Loop behavior (Commit 4): a brief held arrival at the destination marker's
 // brightest, then an eased rewind back to 0 -- the same
 // dwell-then-transition idiom as Ground's dock cycle phases, just simpler
@@ -394,6 +403,8 @@ export class AirEnvironment {
     this.flightHoldTimer = 0;
     this.flightSunlightBoost = 1;
     this.cargoBankLag = 0;
+    this.neighborBoost = 0;
+    this.neighborBoostTarget = 0;
     this.destinationBoost = 1;
 
     // Section 23: key electric blue, fill constant royal blue, "both read at
@@ -575,14 +586,46 @@ export class AirEnvironment {
     this.destinationBoost +=
       (boostTarget - this.destinationBoost) * dampFactor(DESTINATION_BOOST_HALF_LIFE_MS, time.delta);
 
+    // Cinematic Motion Refinement Phase, Commit 4: eases toward whatever
+    // setNeighborInfluence() last targeted (called every tick by
+    // scene-blend.js's corridor loop, including an explicit 0 reset once
+    // this chapter is neither the current nor adjacent scene -- see that
+    // method's own doc).
+    this.neighborBoost += (this.neighborBoostTarget - this.neighborBoost) * dampFactor(NEIGHBOR_BOOST_HALF_LIFE_MS, time.delta);
+
     const markerPulse = 0.85 + 0.15 * Math.sin(time.elapsed / PULSE_PERIOD + 1.7);
     const marker = this.destinationMarker;
-    marker.glow.material.opacity = Math.min(1, marker.baseGlowOpacity * markerPulse * this.destinationBoost);
-    marker.light.intensity = marker.baseLightIntensity * markerPulse * this.destinationBoost;
+    const neighborProminence = 1 + this.neighborBoost * NEIGHBOR_PROMINENCE_SCALE;
+    marker.glow.material.opacity = Math.min(1, marker.baseGlowOpacity * markerPulse * this.destinationBoost * neighborProminence);
+    marker.light.intensity = marker.baseLightIntensity * markerPulse * this.destinationBoost * neighborProminence;
   }
 
   setActivity(state) {
     this.targetActivityWeight = state === 'active' || state === 'entering' ? 1 : this.activityFloor;
+  }
+
+  /** Cinematic Motion Refinement Phase, Commit 4: scene-blend.js's corridor
+   *  loop calls this every tick for every region that defines it -- a
+   *  no-op hook for every other chapter, which simply doesn't implement
+   *  it. `t` is 0-1 how far into the transition corridor the scroll
+   *  position is; `neighborId`/`direction` identify the adjacent chapter
+   *  and whether it's about to appear ('entering') or be left behind
+   *  ('leaving'). Only two pairings are meaningful here -- entering from
+   *  `ground` (the shipment's own departure point) eases the destination
+   *  marker's prominence up a little ahead of the actual shot cut, so the
+   *  onward journey reads as already underway rather than popping in;
+   *  leaving toward `final-mile` eases a smaller settle cue as arrival
+   *  approaches. Every other call (including the explicit reset scene-
+   *  blend sends once this chapter is neither current nor adjacent)
+   *  simply targets 0. */
+  setNeighborInfluence(t, neighborId, direction) {
+    if (direction === 'entering' && neighborId === 'ground') {
+      this.neighborBoostTarget = t;
+    } else if (direction === 'leaving' && neighborId === 'final-mile') {
+      this.neighborBoostTarget = t * 0.6;
+    } else {
+      this.neighborBoostTarget = 0;
+    }
   }
 
   setLightTint(key, fill) {

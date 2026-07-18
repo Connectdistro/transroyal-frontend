@@ -98,12 +98,21 @@ export function mountScrollBlend(worldRoot, experience) {
 
     let t = 0;
     let adjacentId = null;
+    // Which corridor branch we're in also determines the *direction* of
+    // travel (Commit 4's setNeighborInfluence below): the top-of-section
+    // branch means the current chapter just entered from the previous one;
+    // the bottom-of-section branch means the current chapter is about to
+    // leave toward the next one. Same `t`/`adjacentId` shape as before this
+    // commit -- this flag is additive, not a behavior change to fog/
+    // environmentIntensity/activity-boost/light-tint below.
+    let adjacentIsNext = false;
     if (progress < CORRIDOR && currentIndex > 0) {
       t = 1 - progress / CORRIDOR;
       adjacentId = SCENES[currentIndex - 1].id;
     } else if (progress > 1 - CORRIDOR && currentIndex < SCENES.length - 1) {
       t = (progress - (1 - CORRIDOR)) / CORRIDOR;
       adjacentId = SCENES[currentIndex + 1].id;
+      adjacentIsNext = true;
     }
 
     activeSection.style.setProperty('--scene-blend', String(t));
@@ -149,7 +158,34 @@ export function mountScrollBlend(worldRoot, experience) {
     // intentional static-update() decision) are skipped gracefully.
     for (const scene of SCENES) {
       const region = experience.world.getRegion(scene.id);
-      if (!region?.setLightTint) continue;
+      if (!region) continue;
+
+      // Cinematic Motion Refinement Phase, Commit 4: an optional, no-op-by-
+      // default hook letting a region react to an upcoming/departing
+      // neighbor -- today only AirEnvironment.js implements it (see its
+      // own doc). Called every tick for every region, including an
+      // explicit (0, null, null) reset once a region is neither the
+      // current nor adjacent scene, the same explicit-reset shape the
+      // light-tint loop below already uses (no automatic collapse-at-t=0
+      // here, since unlike fog/environmentIntensity there's no other
+      // continuously-running owner of this value). Direction depends on
+      // which corridor branch produced adjacentId (adjacentIsNext above),
+      // not just the current/adjacent role -- the current chapter is
+      // 'entering' (just arrived from the previous one) in the top-of-
+      // section branch, or 'leaving' (about to hand off to the next one)
+      // in the bottom-of-section branch; the adjacent chapter always gets
+      // the opposite label.
+      if (region.setNeighborInfluence) {
+        if (scene.id === currentId && adjacentId) {
+          region.setNeighborInfluence(t, adjacentId, adjacentIsNext ? 'leaving' : 'entering');
+        } else if (scene.id === adjacentId) {
+          region.setNeighborInfluence(t, currentId, adjacentIsNext ? 'entering' : 'leaving');
+        } else {
+          region.setNeighborInfluence(0, null, null);
+        }
+      }
+
+      if (!region.setLightTint) continue;
 
       const home = LIGHT_TINTS[scene.id];
       if (!home) continue;
