@@ -33,6 +33,26 @@ const SKIN_TONE = 0xc48a6a;
 const REGION_Z = -700;
 const STREET_LENGTH = 46;
 
+// Choreography Refinement Pass: a small, distant echo of Air's own
+// aircraft, positioned along this chapter's own `final-mile` sightline
+// (camera/shots.js: position {x:-14,y:3.2,z:-673} -> target {x:7,y:1.3,
+// z:-705}) -- not the literal Air aircraft/geometry (sibling environment
+// files stay independent, the same convention AirEnvironment.js's own
+// CARGO_POD_COLOR comment already establishes for Ground), just a small
+// silhouette in the same flat-color/box vocabulary, echoing Air's own
+// fuselage/cargo-pod/beacon colors so the two read as "the same shipment,
+// still descending" without importing anything. Deliberately simple and
+// small -- a background beat glimpsed during the Air->FinalMile transition
+// corridor (setNeighborInfluence below), not a second hero object; the
+// delivery van stays this chapter's own subject.
+const DISTANT_AIRCRAFT_FUSELAGE_COLOR = 0xd4dbe8; // matches AirEnvironment's FUSELAGE_COLOR
+const DISTANT_AIRCRAFT_CARGO_COLOR = 0x2f5fae; // matches AirEnvironment's CARGO_POD_COLOR
+const DISTANT_AIRCRAFT_BEACON_COLOR = 0xff3b30; // matches AirEnvironment's BEACON_COLOR
+const DISTANT_AIRCRAFT_BEACON_BLINK_PERIOD_MS = 900; // matches AirEnvironment's own period exactly -- reads as the same beacon, not a different one
+const DISTANT_AIRCRAFT_BEACON_INTENSITY = 1.1;
+const DISTANT_AIRCRAFT_POSITION = { x: 35, y: 16, z: -748 };
+const NEIGHBOR_BOOST_HALF_LIFE_MS = 500; // matches AirEnvironment's own half-life
+
 function createStreet() {
   const group = new Group();
   const asphalt = new Mesh(
@@ -175,6 +195,48 @@ function createRouteLine() {
   return new Mesh(new TubeGeometry(curve, 80, 0.045, 8, false), material);
 }
 
+/** See DISTANT_AIRCRAFT_* constants above for the full rationale. Built at
+ *  a small scale (a real aircraft, but read as distant/backgrounded) --
+ *  scale-eased in/out via setNeighborInfluence() below, the same "target
+ *  scale, damped ease" reveal idiom the pallet stack and forklift cargo
+ *  box already use elsewhere in this codebase, rather than an opacity
+ *  fade (its materials are plain opaque MeshStandardMaterial, matching
+ *  every other solid prop in this file). */
+function createDistantAircraft() {
+  const group = new Group();
+
+  const fuselageMaterial = new MeshStandardMaterial({ color: DISTANT_AIRCRAFT_FUSELAGE_COLOR, roughness: 0.35, metalness: 0.45 });
+  const fuselage = new Mesh(new BoxGeometry(0.6, 0.6, 3.2), fuselageMaterial);
+  group.add(fuselage);
+
+  const wingMaterial = new MeshStandardMaterial({ color: 0x14181f, roughness: 0.45, metalness: 0.4 });
+  const wings = new Mesh(new BoxGeometry(4.8, 0.1, 0.7), wingMaterial);
+  wings.position.y = -0.05;
+  group.add(wings);
+
+  const cargoPod = new Mesh(
+    new BoxGeometry(0.45, 0.3, 1.2),
+    new MeshStandardMaterial({ color: DISTANT_AIRCRAFT_CARGO_COLOR, roughness: 0.5, metalness: 0.3 })
+  );
+  cargoPod.position.y = -0.42;
+  group.add(cargoPod);
+
+  const beacon = new Mesh(new SphereGeometry(0.05, 8, 8), new MeshBasicMaterial({ color: DISTANT_AIRCRAFT_BEACON_COLOR }));
+  beacon.position.y = 0.35;
+  const beaconLight = new PointLight(DISTANT_AIRCRAFT_BEACON_COLOR, 0, 3, 2);
+  beaconLight.position.copy(beacon.position);
+  group.add(beacon, beaconLight);
+
+  group.position.set(DISTANT_AIRCRAFT_POSITION.x, DISTANT_AIRCRAFT_POSITION.y, DISTANT_AIRCRAFT_POSITION.z);
+  // A believable descent attitude -- nose down, banked -- rather than
+  // level cruise, since the narrative beat is "still descending."
+  group.rotation.x = 0.25;
+  group.rotation.y = Math.PI * 0.15;
+  group.scale.setScalar(0);
+
+  return { group, beaconLight };
+}
+
 /**
  * Urban Distribution / Final Mile (Production Handbook Section 23, Scene 06)
  * -- closes the human-scale loop opened at Pickup. Own region of the
@@ -194,6 +256,13 @@ export class FinalMileEnvironment {
     const { group: indicatorGroup, light: indicatorLight } = createRoutingIndicator();
     this.indicator = indicatorGroup;
     this.group.add(indicatorGroup, indicatorLight);
+
+    const { group: distantAircraftGroup, beaconLight: distantAircraftBeaconLight } = createDistantAircraft();
+    this.distantAircraft = distantAircraftGroup;
+    this.distantAircraftBeaconLight = distantAircraftBeaconLight;
+    this.group.add(distantAircraftGroup);
+    this.neighborBoost = 0;
+    this.neighborBoostTarget = 0;
 
     // Moderate haze, softer and calmer than Ground (Section 23).
     this.particles = createParticles({
@@ -264,10 +333,34 @@ export class FinalMileEnvironment {
 
     const linePulse = 0.8 + 0.2 * Math.sin(time.elapsed / 3200);
     this.routeLine.material.opacity = this.routeLine.material.userData.baseOpacity * linePulse;
+
+    // Choreography Refinement Pass: eases toward whatever
+    // setNeighborInfluence() last targeted (called every tick by
+    // scene-blend.js's corridor loop for every region that defines it,
+    // including an explicit 0 reset once this chapter is neither current
+    // nor adjacent -- see that method's own doc, and AirEnvironment.js's
+    // matching implementation).
+    this.neighborBoost += (this.neighborBoostTarget - this.neighborBoost) * dampFactor(NEIGHBOR_BOOST_HALF_LIFE_MS, time.delta);
+    this.distantAircraft.scale.setScalar(this.neighborBoost);
+    const beaconBlink = Math.sin((time.elapsed / DISTANT_AIRCRAFT_BEACON_BLINK_PERIOD_MS) * Math.PI * 2) > 0.5 ? 1 : 0;
+    this.distantAircraftBeaconLight.intensity = DISTANT_AIRCRAFT_BEACON_INTENSITY * beaconBlink * this.neighborBoost * this.activityWeight;
   }
 
   setActivity(state) {
     this.targetActivityWeight = state === 'active' || state === 'entering' ? 1 : this.activityFloor;
+  }
+
+  /** scene-blend.js's corridor loop calls this every tick for every region
+   *  that defines it -- see AirEnvironment.js's own setNeighborInfluence()
+   *  for the full mechanism doc. The only meaningful pairing here: entering
+   *  from `air` (the shipment's own final leg) eases the distant-aircraft
+   *  echo above into view as the delivery van becomes this chapter's own
+   *  hero, so the handoff reads as one continuous descent rather than the
+   *  aircraft simply vanishing. Every other call, including the explicit
+   *  reset scene-blend sends once this chapter is neither current nor
+   *  adjacent, targets 0. */
+  setNeighborInfluence(t, neighborId, direction) {
+    this.neighborBoostTarget = direction === 'entering' && neighborId === 'air' ? t : 0;
   }
 
   setLightTint(key, fill) {
