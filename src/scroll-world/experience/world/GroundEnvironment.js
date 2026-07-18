@@ -121,6 +121,10 @@ const FORKLIFT_IDLE = [
   { x: DOCK_CENTER_X + 4, z: DOCK_CENTER_Z + 6 },
 ];
 const FORKLIFT_TRIP_PERIOD_MS = [2600, 3100];
+// Logistics Choreography Phase, Commit 2: how far forkGroup.position.y
+// rises while carrying -- clears the seat/mast comfortably (seat sits at
+// y=1.45; forks start at local y=0.25, so 0.6 lift tops out around y=0.85).
+const FORKLIFT_LIFT_HEIGHT = 0.6;
 
 /** Logistics Choreography Phase, Commit 1: rolls a vehicle's wheel meshes
  *  by the arc-length equivalent of how far it actually moved this frame --
@@ -384,6 +388,20 @@ function createForklift(seed) {
     forkGroup.add(fork);
   });
   group.add(forkGroup);
+
+  // Logistics Choreography Phase, Commit 2: a cargo box carried on the
+  // forks, visible only while loaded -- CONTAINER_COLORS[0], the same
+  // color Air's own cargo pod echoes ("the same shipment" through both
+  // chapters). Parented to forkGroup so it lifts/lowers/travels with the
+  // forks automatically, no separate position tracking.
+  const cargoBox = new Mesh(
+    new BoxGeometry(0.8, 0.6, 0.8),
+    new MeshStandardMaterial({ color: CONTAINER_COLORS[0], roughness: 0.5, metalness: 0.2 })
+  );
+  cargoBox.position.set(0, 0.55, 0.85);
+  cargoBox.scale.setScalar(0);
+  forkGroup.add(cargoBox);
+  group.userData.cargoBox = cargoBox;
 
   const wheelGeometry = new CylinderGeometry(0.32, 0.32, 0.3, 12);
   const wheels = [];
@@ -1034,10 +1052,11 @@ export class GroundEnvironment {
       const idle = FORKLIFT_IDLE[i];
       let targetX = idle.x;
       let targetZ = idle.z;
+      let atDrop = false;
       if (phase === 'unload') {
         const period = FORKLIFT_TRIP_PERIOD_MS[i];
         const tripPhase = ((unloadElapsed + i * 900) % period) / period;
-        const atDrop = tripPhase < 0.5;
+        atDrop = tripPhase < 0.5;
         targetX = atDrop ? FORKLIFT_DROP.x : FORKLIFT_PICKUP.x;
         targetZ = atDrop ? FORKLIFT_DROP.z : FORKLIFT_PICKUP.z;
       }
@@ -1054,9 +1073,25 @@ export class GroundEnvironment {
       // unlike trucks) -- a plain untextured wheel shows no visual
       // difference for direction of spin, so magnitude alone is enough.
       rollWheels(forklift.userData.wheels, Math.hypot(dx, dz) * motionT, FORKLIFT_WHEEL_RADIUS);
+      // Logistics Choreography Phase, Commit 2: real staged lift, replacing
+      // the previous rotational wobble -- forks rise while heading to DROP
+      // (carrying the load) and lower while heading back to PICKUP (empty),
+      // reusing the exact same `atDrop` signal already computed above for
+      // horizontal translation rather than a new sub-phase timeline. Target
+      // change + damped ease, the same idiom this file's own dock-cycle
+      // comments describe explicitly ("a target change, not a hand-computed
+      // trajectory"). A visible cargo box (CONTAINER_COLORS[0], the same
+      // echo Air's own cargo pod already uses) reveals in step via a scale
+      // ease, the same idiom the pallet stack already uses, so the forklift
+      // visibly IS carrying something rather than just tilting its tines.
       const forkGroup = forklift.userData.forkGroup;
-      forkGroup.rotation.x =
-        phase === 'unload' ? Math.sin(time.elapsed / 480 + i * 2) * 0.12 : forkGroup.rotation.x * (1 - motionT);
+      const forkHeightTarget = phase === 'unload' && atDrop ? FORKLIFT_LIFT_HEIGHT : 0;
+      forkGroup.position.y += (forkHeightTarget - forkGroup.position.y) * motionT;
+      const cargoBox = forklift.userData.cargoBox;
+      if (cargoBox) {
+        const cargoTargetScale = phase === 'unload' && atDrop ? 1 : 0;
+        cargoBox.scale.setScalar(cargoBox.scale.x + (cargoTargetScale - cargoBox.scale.x) * motionT);
+      }
 
       // Cinematic Motion Refinement Phase, Commit 2: mast sway -- until now
       // only the fork-tine group (above) had any motion; the mast itself
