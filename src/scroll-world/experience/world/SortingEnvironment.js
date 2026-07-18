@@ -6,6 +6,8 @@ import {
   MeshBasicMaterial,
   MeshPhysicalMaterial,
   MeshStandardMaterial,
+  PointLight,
+  SphereGeometry,
   TubeGeometry,
   Vector3,
 } from 'three';
@@ -80,6 +82,20 @@ function createScanArches() {
   }
 
   group.userData.glowMeshes = group.children.filter((child) => child.material === glowMaterial);
+
+  // Cinematic Motion Refinement Phase, Commit 5: one small ambient beacon
+  // -- Sorting was the one chapter with zero practical-light beacons
+  // (Ground's dock beacon, FinalMile's porch light, Pickup's scanner all
+  // have one). Same small-radius glow-mesh-plus-PointLight precedent,
+  // placed at the nearest bay's beam.
+  const beacon = new Mesh(new SphereGeometry(0.1, 8, 8), new MeshBasicMaterial({ color: ELECTRIC_400 }));
+  beacon.position.set(0, 5.9, REGION_Z + CONVEYOR_LENGTH / 2 - 4);
+  const beaconLight = new PointLight(ELECTRIC_400, 1.2, 5, 2);
+  beaconLight.position.copy(beacon.position);
+  group.add(beacon, beaconLight);
+  group.userData.beacon = beacon;
+  group.userData.beaconLight = beaconLight;
+
   return group;
 }
 
@@ -167,6 +183,9 @@ export class SortingEnvironment {
       height: 6,
       offsetZ: REGION_Z,
       opacity: 0.3,
+      // Cinematic Motion Refinement Phase, Commit 5: see PickupEnvironment
+      // for the same reused-turbulence-layer rationale.
+      turbulence: 0.2,
     });
     this.group.add(this.particles);
 
@@ -214,7 +233,7 @@ export class SortingEnvironment {
     this.keyLight.color.lerp(this.targetKeyColor, tintT);
     this.fillLight.color.lerp(this.targetFillColor, tintT);
 
-    updateParticles(this.particles, time.delta / 1000);
+    updateParticles(this.particles, time.delta / 1000, time.elapsed);
 
     const deltaSeconds = time.delta / 1000;
     const velocityT = dampFactor(VELOCITY_HALF_LIFE_MS, time.delta);
@@ -239,6 +258,13 @@ export class SortingEnvironment {
     this.arches.userData.glowMeshes.forEach((glow, i) => {
       glow.scale.y = 0.7 + 0.3 * Math.sin(time.elapsed / PULSE_PERIOD + i);
     });
+
+    // Cinematic Motion Refinement Phase, Commit 5: the new ambient beacon's
+    // own pulse -- a distinct period from PULSE_PERIOD above (arch glow /
+    // route line) so nothing pulses in lockstep, tied to activityWeight
+    // like every other light in this chapter.
+    const beaconPulse = 0.8 + 0.2 * Math.sin(time.elapsed / 2000);
+    this.arches.userData.beaconLight.intensity = 1.2 * beaconPulse * this.activityWeight;
   }
 
   setActivity(state) {

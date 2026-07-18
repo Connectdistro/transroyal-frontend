@@ -203,6 +203,12 @@ export class FinalMileEnvironment {
       height: 5,
       offsetZ: REGION_Z,
       opacity: 0.25,
+      // Cinematic Motion Refinement Phase, Commit 5: a smaller turbulence
+      // amplitude than Pickup/Sorting's -- this chapter's own documented
+      // calm ("deliberately less motion than any chapter since Origin")
+      // is preserved, this is atmosphere only, not new vehicle/figure
+      // motion.
+      turbulence: 0.12,
     });
     this.group.add(this.particles);
 
@@ -250,7 +256,7 @@ export class FinalMileEnvironment {
     this.keyLight.color.lerp(this.targetKeyColor, tintT);
     this.fillLight.color.lerp(this.targetFillColor, tintT);
 
-    updateParticles(this.particles, time.delta / 1000);
+    updateParticles(this.particles, time.delta / 1000, time.elapsed);
 
     // A slow, calm pulse -- the routing indicator, not a busier motif.
     const pulse = 0.6 + 0.4 * Math.sin(time.elapsed / 2600);

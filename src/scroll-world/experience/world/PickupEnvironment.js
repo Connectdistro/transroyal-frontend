@@ -265,6 +265,11 @@ export class PickupEnvironment {
       height: 7,
       offsetZ: REGION_Z,
       opacity: 0.35,
+      // Cinematic Motion Refinement Phase, Commit 5: opts into the existing
+      // turbulence layer (createParticles.js) -- "layered cloud drift /
+      // subtle wind" reusing infrastructure Origin/Ground already use, not
+      // a new mechanism. Modest relative to Ground's own 0.25-0.3.
+      turbulence: 0.2,
     });
     this.group.add(this.particles);
 
@@ -314,7 +319,7 @@ export class PickupEnvironment {
     this.keyLight.color.lerp(this.targetKeyColor, tintT);
     this.fillLight.color.lerp(this.targetFillColor, tintT);
 
-    updateParticles(this.particles, time.delta / 1000);
+    updateParticles(this.particles, time.delta / 1000, time.elapsed);
 
     const pulse = 1 - PULSE_DEPTH + PULSE_DEPTH * Math.sin((time.elapsed / PULSE_PERIOD) * Math.PI * 2);
     this.routeLine.material.opacity = this.routeLine.material.userData.baseOpacity * pulse;
