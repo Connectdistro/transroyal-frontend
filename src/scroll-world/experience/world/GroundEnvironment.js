@@ -47,6 +47,14 @@ const VELOCITY_HALF_LIFE_MS = 300;
 const WRAP_TAPER_DISTANCE = HIGHWAY_LENGTH * 0.12;
 const MIN_TAPER_FACTOR = 0.15;
 
+// Choreography Refinement Pass, Commit 2: a small nose-down settle stacked
+// on top of the existing braking pitch (rotation.x, below) -- reuses the
+// same `taper` signal (already 0 while decelerating into a wrap, 1 at
+// cruise) rather than a new deceleration tracker. Squared so the dip stays
+// negligible until taper is genuinely low, not a straight-line ramp across
+// the whole taper window.
+const BRAKE_DIVE_AMPLITUDE = 0.035;
+
 // Ground Chapter Cinematic Realism Pass, Commit 1: the dock/yard operation
 // is the chapter's actual visual subject now, not the highway -- placed
 // against the `ground` shot's own sightline (camera/shots.js:
@@ -95,6 +103,24 @@ const DOOR_CLOSED_Y = 2.5;
 const DOOR_OPEN_Y = 2.5 + 4.6;
 const DOCK_MOTION_HALF_LIFE_MS = 900;
 const PALLET_REVEAL_HALF_LIFE_MS = 350;
+
+// Choreography Refinement Pass, Commit 1: a slow, irregular amplitude
+// modulation on the existing cable/pennant sway (still the same base sines
+// below) -- reads as gusting wind rather than a metronomic loop. Two
+// mismatched periods multiplied together, not one, so the combined envelope
+// never repeats on either period alone.
+const WIND_GUST_PERIOD_A_MS = 8600;
+const WIND_GUST_PERIOD_B_MS = 5200;
+
+// Choreography Refinement Pass, Commit 3: how far (world Z) the dock truck's
+// own remaining distance-to-target maps to a full-strength camera lead --
+// roughly the arrive->dock leg's own length (QUEUE_WAYPOINT_Z to
+// DOCK_TRUCK_WAYPOINT_Z is 16), so the lead is near-full right after a phase
+// change and eases off as the truck actually reaches its target, the same
+// "how fast it's actually moving" shape Air's own setTargetLead() caller
+// already uses.
+const DOCK_LEAD_REFERENCE_DISTANCE = 16;
+const DOCK_LEAD_MAX_AMPLITUDE = 0.7;
 
 // Logistics Choreography Phase, Commit 1: matches each wheel's own
 // CylinderGeometry radius exactly (createTruck/createForklift), used to
@@ -353,6 +379,27 @@ function createDockYard() {
     exhaustPuff.position.set(1.3, 2.4, 4.4);
     truck.add(exhaustPuff);
     truck.userData.exhaustPuff = exhaustPuff;
+
+    // Choreography Refinement Pass, Commit 1: a low, ground-hugging dust
+    // puff near the rear wheel cluster, same parented-particles technique
+    // as exhaustPuff above (follows the truck for free) -- driven by the
+    // same arrive/depart opacity target in updateDockCycle(), just a
+    // distinct color/height/count so it reads as kicked-up dust, not more
+    // exhaust.
+    const tireDust = createParticles({
+      count: 14,
+      spreadX: 1.6,
+      spreadZ: 1,
+      height: 0.4,
+      driftSpeed: 0.05,
+      color: 0xb3a184,
+      size: 0.05,
+      opacity: 0,
+      turbulence: 0.15,
+    });
+    tireDust.position.set(0, 0.2, -3);
+    truck.add(tireDust);
+    truck.userData.tireDust = tireDust;
   });
 
   const palletBaseMaterial = new MeshStandardMaterial({ color: 0x5a4632, roughness: 0.85, metalness: 0 });
@@ -536,6 +583,7 @@ function createTruck(color, seed = 0) {
 
   const wheelGeometry = new CylinderGeometry(0.5, 0.5, 0.4, 14);
   const wheels = [];
+  const frontWheels = [];
   [-4.5, -1.5, 1.5, 4.5].forEach((z) => {
     [-1.6, 1.6].forEach((x) => {
       const wheel = new Mesh(wheelGeometry, rubberMaterial);
@@ -543,12 +591,17 @@ function createTruck(color, seed = 0) {
       wheel.position.set(x, 0.5, z);
       group.add(wheel);
       wheels.push(wheel);
+      // Choreography Refinement Pass, Commit 2: the steer axle -- the pair
+      // nearest the cab (z=5) -- kept separate so updateDockCycle() can yaw
+      // just these two, not the whole wheelset, while steering.
+      if (z === 4.5) frontWheels.push(wheel);
     });
   });
   // Logistics Choreography Phase, Commit 1: stored so update()/
   // updateDockCycle() can roll them proportional to actual per-frame
   // movement -- previously built and positioned, then discarded.
   group.userData.wheels = wheels;
+  group.userData.frontWheels = frontWheels;
 
   [-1.4, 1.4].forEach((x) => {
     const tail = new Mesh(new BoxGeometry(0.15, 0.25, 0.05), lightMaterial);
@@ -957,9 +1010,16 @@ export class GroundEnvironment {
     // a small pennant's light sway -- distinct, independent periods from
     // every other ambient touch in this chapter, so nothing pulses in
     // lockstep.
-    this.dockCable.rotation.z = Math.sin(time.elapsed / 2600) * 0.05;
-    this.dockCable.rotation.x = Math.sin(time.elapsed / 3100 + 1) * 0.03;
-    this.dockPennant.rotation.y = Math.sin(time.elapsed / 1400) * 0.35;
+    // Choreography Refinement Pass, Commit 1: two mismatched slow sines
+    // multiplied together, remapped to a positive [0.55, 1.15] range -- an
+    // irregular gust envelope on top of the sway's own base periods below,
+    // rather than a second fixed period that would just add a new kind of
+    // metronome.
+    const windGust =
+      0.85 + 0.3 * Math.sin(time.elapsed / WIND_GUST_PERIOD_A_MS) * Math.sin(time.elapsed / WIND_GUST_PERIOD_B_MS + 0.6);
+    this.dockCable.rotation.z = Math.sin(time.elapsed / 2600) * 0.05 * windGust;
+    this.dockCable.rotation.x = Math.sin(time.elapsed / 3100 + 1) * 0.03 * windGust;
+    this.dockPennant.rotation.y = Math.sin(time.elapsed / 1400) * 0.35 * windGust;
 
     const deltaSeconds = time.delta / 1000;
     const halfLength = HIGHWAY_LENGTH / 2;
@@ -987,7 +1047,8 @@ export class GroundEnvironment {
       // that grows as `taper` shrinks (i.e. exactly while the truck is
       // decelerating into its wrap) reads as braking, then releases once
       // taper recovers past the wrap.
-      truck.position.y = Math.sin(time.elapsed / 90 + truckIndex * 1.7) * 0.004;
+      const brakeDive = (1 - taper) ** 2 * BRAKE_DIVE_AMPLITUDE;
+      truck.position.y = Math.sin(time.elapsed / 90 + truckIndex * 1.7) * 0.004 - brakeDive;
       truck.rotation.x = (1 - taper) * 0.05 * truck.userData.direction;
 
       // Cinematic Motion Refinement Phase, Commit 2: a small persistent
@@ -1055,10 +1116,20 @@ export class GroundEnvironment {
     // during arrive/depart (accelerating away from a stop), reusing the
     // phase transitions already tracked above rather than a new signal.
     const exhaustTargetOpacity = phase === 'arrive' || phase === 'depart' ? 0.22 : 0;
+    // Choreography Refinement Pass, Commit 1: dust shares the exhaust
+    // puff's own arrive/depart gate (a truck kicks up dust exactly when
+    // it's accelerating away from a stop, the same moment exhaust
+    // brightens) at a lower ceiling opacity -- distinct enough from the
+    // exhaust's own reading, not a second independent trigger.
+    const dustTargetOpacity = exhaustTargetOpacity > 0 ? 0.18 : 0;
     [this.dockTruck, this.queuedTruck].forEach((truck) => {
       const puff = truck.userData.exhaustPuff;
       puff.material.opacity += (exhaustTargetOpacity - puff.material.opacity) * motionT;
       updateParticles(puff, time.delta / 1000, time.elapsed);
+
+      const dust = truck.userData.tireDust;
+      dust.material.opacity += (dustTargetOpacity - dust.material.opacity) * motionT;
+      updateParticles(dust, time.delta / 1000, time.elapsed);
     });
 
     // Logistics Choreography Phase, Commit 1: rolled by the actual applied
@@ -1072,6 +1143,19 @@ export class GroundEnvironment {
     // already use for their own pitch.
     this.dockTruck.rotation.z = Math.max(-0.03, Math.min(0.03, dockTruckDeltaZ * 0.01));
     this.queuedTruck.rotation.z = Math.max(-0.03, Math.min(0.03, queuedTruckDeltaZ * 0.01));
+
+    // Choreography Refinement Pass, Commit 2: front-wheel steering yaw --
+    // the same steering-correction roll above, applied to just the steer
+    // axle (frontWheels) as a visible yaw rather than a body lean. A
+    // distinct, larger gain/ceiling than the body roll's own 0.03 rad, since
+    // a wheel visibly turning reads at a much smaller body-roll input than
+    // the body itself needs to lean to sell "steering."
+    [this.dockTruck, this.queuedTruck].forEach((truck) => {
+      const steerAngle = Math.max(-0.35, Math.min(0.35, truck.rotation.z * 8));
+      truck.userData.frontWheels.forEach((wheel) => {
+        wheel.rotation.y = steerAngle;
+      });
+    });
 
     // Logistics Choreography Phase, Commit 3: turn-signal blink, reusing
     // the steering-correction roll's own sign above as the "which way"
@@ -1205,6 +1289,16 @@ export class GroundEnvironment {
       const blink = Math.sin(time.elapsed / 340 + i * 5) > 0.6 ? 1 : 0.25;
       forklift.userData.beaconLight.intensity = 1.6 * blink * this.activityWeight;
     });
+
+    // Choreography Refinement Pass, Commit 3: a small camera lead toward
+    // the dock truck's own direction of travel, magnitude scaled by how
+    // much of its current leg still remains -- near-full right after
+    // arrive/depart begins (dockTruckDeltaZ still large), easing to zero as
+    // it actually reaches its target. Same setTargetLead() entry point
+    // Air's own aircraft already uses (CameraRig applies it only while the
+    // `ground` shot is the active one -- see that method's own guard).
+    const leadMagnitude = Math.min(1, Math.abs(dockTruckDeltaZ) / DOCK_LEAD_REFERENCE_DISTANCE) * DOCK_LEAD_MAX_AMPLITUDE;
+    this.experience.camera.setTargetLead('ground', 0, 0, Math.sign(dockTruckDeltaZ) * leadMagnitude);
 
     // Reversing service vehicle -- a short, continuous reverse/return loop
     // on its own period, deliberately independent of the dock cycle above
