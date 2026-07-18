@@ -274,6 +274,42 @@ function createScanPractical() {
   return { group, light };
 }
 
+/** Track B2/B3: ground-wear decals and an abstract bay-number panel,
+ *  reusing Ground's own established techniques exactly (createYardMarkings()'s
+ *  thin painted-box decals, createYardSignage()'s flat-panel-plus-emissive-
+ *  edge convention) rather than inventing a new visual language for this
+ *  chapter. Pickup's own dock floor previously had zero surface detail at
+ *  all -- a single flat material with nothing painted or worn into it. */
+function createGroundDetail() {
+  const group = new Group();
+
+  const wearMaterial = new MeshBasicMaterial({ color: 0x02030a, transparent: true, opacity: 0.3 });
+  // Scuffed patches under the vehicle's own wheel positions and the
+  // driver's own standing spot -- exactly where real repeated traffic
+  // would actually wear the floor, not scattered decoratively.
+  [
+    [9 - 1.75, REGION_Z + 6 + 2.4, 0.9],
+    [9 + 1.75, REGION_Z + 6 + 2.4, 0.9],
+    [9 - 1.75, REGION_Z + 6 - 2.6, 0.9],
+    [9 + 1.75, REGION_Z + 6 - 2.6, 0.9],
+    [4, REGION_Z + 8, 1.3],
+  ].forEach(([x, z, size]) => {
+    const patch = new Mesh(new BoxGeometry(size, 0.02, size), wearMaterial);
+    patch.position.set(x, 0.02, z);
+    group.add(patch);
+  });
+
+  const panelMaterial = new MeshStandardMaterial({ color: 0x0c1338, roughness: 0.5, metalness: 0.3 });
+  const panelEdgeMaterial = new MeshBasicMaterial({ color: ELECTRIC_400 });
+  const panel = new Mesh(new BoxGeometry(2.4, 1, 0.15), panelMaterial);
+  const panelEdge = new Mesh(new BoxGeometry(2.6, 1.2, 0.08), panelEdgeMaterial);
+  panel.position.set(6, 4.4, REGION_Z - 15.65);
+  panelEdge.position.set(6, 4.4, REGION_Z - 15.7);
+  group.add(panel, panelEdge);
+
+  return group;
+}
+
 function createRouteLine() {
   // Continues the route-line motif from roughly where Origin's own primary
   // curve ends, into Pickup's region, resolving at the scan point -- Section
@@ -307,7 +343,7 @@ export class PickupEnvironment {
 
     this.group = new Group();
     this.vehicle = createVehicle();
-    this.group.add(createDockFloor(), createDockWall(), this.vehicle, createDriver());
+    this.group.add(createDockFloor(), createDockWall(), createGroundDetail(), this.vehicle, createDriver());
 
     const { group: scanGroup, light: scanLight } = createScanPractical();
     this.group.add(scanGroup, scanLight);

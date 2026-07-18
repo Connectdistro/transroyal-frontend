@@ -208,6 +208,37 @@ function createDiverter() {
   return group;
 }
 
+/** Track B2/B3: belt-boundary wear decals and abstract lane-marker panels,
+ *  reusing Ground's own createYardMarkings()/createYardSignage() techniques
+ *  (thin painted-box decals; flat panel + emissive edge) rather than a new
+ *  visual language. This mezzanine floor previously had zero surface detail
+ *  despite three parallel high-traffic conveyor lanes running its length. */
+function createFloorDetail() {
+  const group = new Group();
+
+  const wearMaterial = new MeshBasicMaterial({ color: 0x02030a, transparent: true, opacity: 0.22 });
+  CONVEYOR_X.forEach((x) => {
+    [-1.7, 1.7].forEach((offset) => {
+      const strip = new Mesh(new BoxGeometry(0.6, 0.02, CONVEYOR_LENGTH * 0.7), wearMaterial);
+      strip.position.set(x + offset, 0.02, REGION_Z);
+      group.add(strip);
+    });
+  });
+
+  const panelMaterial = new MeshStandardMaterial({ color: 0x0c1338, roughness: 0.5, metalness: 0.3 });
+  const panelEdgeMaterial = new MeshBasicMaterial({ color: ROYAL_500 });
+  CONVEYOR_X.forEach((x) => {
+    const panel = new Mesh(new BoxGeometry(1.6, 0.7, 0.1), panelMaterial);
+    const panelEdge = new Mesh(new BoxGeometry(1.76, 0.86, 0.05), panelEdgeMaterial);
+    const z = REGION_Z - CONVEYOR_LENGTH / 2 - 1.2;
+    panel.position.set(x, 1.1, z);
+    panelEdge.position.set(x, 1.1, z - 0.03);
+    group.add(panel, panelEdge);
+  });
+
+  return group;
+}
+
 function createRouteLine() {
   // Continues from Pickup's own end point (see PickupEnvironment.js) through
   // Sorting's region -- Section 23: the parcel rejoins the flow of the
@@ -240,7 +271,7 @@ export class SortingEnvironment {
     this.conveyors = createConveyors();
     this.diverter = createDiverter();
     this.routeLine = createRouteLine();
-    this.group.add(createMezzanineFloor(), this.arches, this.conveyors, this.diverter, this.routeLine);
+    this.group.add(createMezzanineFloor(), createFloorDetail(), this.arches, this.conveyors, this.diverter, this.routeLine);
 
     // Track A2's own decision-moment target: the one parcel that diverts
     // every lap (see DIVERTER_LINE_INDEX/DIVERTER_PARCEL_LOCAL_INDEX above).
