@@ -191,6 +191,14 @@ function createDockBuilding() {
   door.position.set(-3, 2.5, 7.2);
   group.add(doorBackdrop, door);
 
+  // Logistics Choreography Phase, Commit 3: a flashing amber warning
+  // light, active only while the door is actually mid-motion (reuses the
+  // door's own existing position-lerp state -- see update()). Starts at
+  // intensity 0, matching every other beacon's "starts off/dark" pattern.
+  const doorWarningLight = new PointLight(0xffaa33, 0, 3, 2);
+  doorWarningLight.position.set(-3, 5.3, 7.3);
+  group.add(doorWarningLight);
+
   const platformPositions = [
     [-5, 0.5, 8],
     [-1, 0.5, 8],
@@ -223,7 +231,7 @@ function createDockBuilding() {
   });
 
   group.position.set(DOCK_CENTER_X, 0, DOCK_CENTER_Z);
-  return { group, door, platforms, containers };
+  return { group, door, doorWarningLight, platforms, containers };
 }
 
 /** Layered lighting fixtures (Commit 4) -- a floodlight and a softer
@@ -524,6 +532,39 @@ function createTruck(color, seed = 0) {
     group.add(tail);
   });
 
+  // Logistics Choreography Phase, Commit 3: headlights at the cab's front
+  // face (local +Z, opposite the tail lights above) -- every truck built
+  // by this shared function (highway fleet, dock/queued trucks, the
+  // service vehicle) already carries its own correct rotation.y for
+  // which way it faces, so a fixed local position here automatically
+  // points the right way for all of them.
+  const headlightMaterial = new MeshBasicMaterial({ color: OFFWHITE_100 });
+  const headlights = [];
+  [-1.4, 1.4].forEach((x) => {
+    const headlight = new Mesh(new BoxGeometry(0.2, 0.2, 0.05), headlightMaterial);
+    headlight.position.set(x, 1.9, 6.15);
+    group.add(headlight);
+    headlights.push(headlight);
+  });
+  group.userData.headlights = headlights;
+
+  // Turn-signal-style indicator lights, one per side -- built for every
+  // truck (this shared function), but only actually driven for the dock/
+  // queued trucks in updateDockCycle() (the only ones that "turn," in
+  // this chapter's own abstracted sense -- the highway fleet just cruises
+  // straight, so these simply stay dark for them, same as a real truck
+  // never signaling on an open highway).
+  const indicatorMaterial = new MeshBasicMaterial({ color: 0xffaa33 });
+  const indicators = [];
+  [-1.4, 1.4].forEach((x) => {
+    const indicator = new Mesh(new BoxGeometry(0.12, 0.12, 0.05), indicatorMaterial);
+    indicator.position.set(x, 1.6, 6.15);
+    indicator.visible = false;
+    group.add(indicator);
+    indicators.push(indicator);
+  });
+  group.userData.indicators = indicators; // [left, right]
+
   return group;
 }
 
@@ -704,6 +745,7 @@ export class GroundEnvironment {
     // choreography cycle; this constructor only builds and places them.
     const dockBuilding = createDockBuilding();
     this.dockDoor = dockBuilding.door;
+    this.dockDoorWarningLight = dockBuilding.doorWarningLight;
     this.dockPlatforms = dockBuilding.platforms;
     this.containers = dockBuilding.containers;
     this.group.add(dockBuilding.group);
@@ -997,10 +1039,31 @@ export class GroundEnvironment {
     this.dockTruck.rotation.z = Math.max(-0.03, Math.min(0.03, dockTruckDeltaZ * 0.01));
     this.queuedTruck.rotation.z = Math.max(-0.03, Math.min(0.03, queuedTruckDeltaZ * 0.01));
 
+    // Logistics Choreography Phase, Commit 3: turn-signal blink, reusing
+    // the steering-correction roll's own sign above as the "which way"
+    // signal -- no new steering-intent logic. Only lit while the roll is
+    // meaningfully nonzero (still correcting toward its target, not yet
+    // settled) and the shared blink gate is on.
+    const indicatorBlink = Math.sin(time.elapsed / 200) > 0.2;
+    [this.dockTruck, this.queuedTruck].forEach((truck) => {
+      const [left, right] = truck.userData.indicators;
+      const active = indicatorBlink && Math.abs(truck.rotation.z) > 0.004;
+      left.visible = active && truck.rotation.z < 0;
+      right.visible = active && truck.rotation.z > 0;
+    });
+
     // Dock door: this is what its open/close easing is *for* -- not a
     // standalone decorative loop.
     const doorTargetY = phase === 'dockOpen' || phase === 'unload' ? DOOR_OPEN_Y : DOOR_CLOSED_Y;
     this.dockDoor.position.y += (doorTargetY - this.dockDoor.position.y) * motionT;
+
+    // Logistics Choreography Phase, Commit 3: the warning light activates
+    // only while the door hasn't yet reached its target -- reuses the
+    // door's own position-lerp state directly rather than tracking phase
+    // membership separately, so it's lit for exactly as long as the door
+    // is visibly moving, regardless of which phase boundary triggered it.
+    const doorMidMotion = Math.abs(doorTargetY - this.dockDoor.position.y) > 0.05;
+    this.dockDoorWarningLight.intensity = doorMidMotion && Math.sin(time.elapsed / 180) > 0 ? 1.4 : 0;
 
     // Pallet stack: each pallet reveals at its own threshold within the
     // unload window -- a visibly growing stack, not an instant swap -- and
