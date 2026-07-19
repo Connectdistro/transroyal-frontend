@@ -144,7 +144,10 @@ function createVehicle() {
     metalness: 0.1,
   });
   const rubberMaterial = new MeshStandardMaterial({ color: RUBBER_COLOR, roughness: 0.9, metalness: 0.1 });
-  const tailMaterial = new MeshBasicMaterial({ color: ELECTRIC_400 });
+  // A physical vehicle function -- real-world red, not the brand's blue
+  // (Material Language Guide: taillights are Physical, real-world
+  // convention wins). Matches Air's own anti-collision beacon red exactly.
+  const tailMaterial = new MeshBasicMaterial({ color: 0xff3b30 });
   const headMaterial = new MeshBasicMaterial({ color: OFFWHITE_100 });
 
   const cargo = new Mesh(new BoxGeometry(3.4, 3, 6.5), bodyMaterial);

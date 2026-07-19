@@ -607,7 +607,10 @@ function createTruck(color, seed = 0) {
   // copies -- construction time only, zero per-frame cost.
   varyMaterial(bodyMaterial, seed);
   const rubberMaterial = new MeshStandardMaterial({ color: RUBBER_COLOR, roughness: 0.9, metalness: 0.1 });
-  const lightMaterial = new MeshBasicMaterial({ color: ELECTRIC_400 });
+  // A physical vehicle function -- real-world red, not the brand's blue
+  // (Material Language Guide: taillights are Physical, real-world
+  // convention wins). Matches Air's own anti-collision beacon red exactly.
+  const tailLightMaterial = new MeshBasicMaterial({ color: 0xff3b30 });
 
   const cargo = new Mesh(new BoxGeometry(3, 3, 8), bodyMaterial);
   cargo.position.set(0, 1.6, 0);
@@ -642,7 +645,7 @@ function createTruck(color, seed = 0) {
   group.userData.frontWheels = frontWheels;
 
   [-1.4, 1.4].forEach((x) => {
-    const tail = new Mesh(new BoxGeometry(0.15, 0.25, 0.05), lightMaterial);
+    const tail = new Mesh(new BoxGeometry(0.15, 0.25, 0.05), tailLightMaterial);
     tail.position.set(x, 1.9, -4.1);
     group.add(tail);
   });

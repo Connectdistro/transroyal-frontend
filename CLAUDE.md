@@ -9,6 +9,7 @@ Every implementation should satisfy these principles:
 - Hero objects guide the viewer's attention; secondary motion supports them without competing.
 - Lighting and color evolve continuously across chapter boundaries, never cut.
 - Materials should never appear perfectly uniform (see `materialVariation.js`'s `varyMaterial`).
+- **Color is semantic**, not decorative (see `docs/MATERIAL_LANGUAGE_GUIDE.md`). Every material is Physical, Digital, or Brand. Warm tones represent the physical logistics world and respond to scene lighting; blue represents information, connectivity, and tracking, and stays blue regardless of lighting; brand colors are reserved for genuine identity moments, not ambient decoration. Real-world convention wins for anything with one (vehicle lights, aviation equipment, safety colors) — the brand doesn't override a taillight's legally-recognizable red.
 - Scene transitions should feel like one uninterrupted shot wherever geometrically honest — don't fake a connection two regions' actual coordinates don't support.
 - Every object has a purpose; every movement has a reason.
 - Favor realism over spectacle.
