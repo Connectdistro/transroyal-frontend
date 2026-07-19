@@ -54,6 +54,31 @@ const DISTANT_AIRCRAFT_BEACON_INTENSITY = 1.1;
 const DISTANT_AIRCRAFT_POSITION = { x: 35, y: 16, z: -748 };
 const NEIGHBOR_BOOST_HALF_LIFE_MS = 500; // matches AirEnvironment's own half-life
 
+// Choreography Refinement Pass, Track A5: this chapter's decision moment --
+// "the driver takes possession of the package for delivery." The figure
+// (previously completely static) now walks a long, calm loop: van -> the
+// nearest house's doorstep -> back, carrying a parcel that echoes
+// DeliveredEnvironment.js's own createParcel() color vocabulary (duplicated
+// hex, per this codebase's sibling-file-independence convention) -- "the
+// same shipment," now in the driver's hands, one chapter before it comes to
+// rest on the doorstep for good. A long cycle and slow ease matching this
+// file's own documented pace ("deliberately less motion than any chapter
+// since Origin").
+const HANDOFF_CYCLE_MS = 38000;
+const HANDOFF_TO_VAN_END = 7000;
+const HANDOFF_AT_DOOR_END = 23000;
+const HANDOFF_RETURN_END = 32000;
+const FIGURE_MOTION_HALF_LIFE_MS = 1800;
+const HANDOFF_PARCEL_REVEAL_HALF_LIFE_MS = 400;
+// Kept clear of both the van's and the (13, REGION_Z-14) house's own
+// geometry bounds -- verified against their actual BoxGeometry extents,
+// not guessed.
+const FIGURE_REST = { x: 2, z: REGION_Z - 9 };
+const FIGURE_VAN_POINT = { x: 4, z: REGION_Z - 2.5 };
+const FIGURE_DOOR_POINT = { x: 9, z: REGION_Z - 14 };
+const HANDOFF_PARCEL_COLOR = 0x141a3a; // matches DeliveredEnvironment's own createParcel()
+const HANDOFF_PARCEL_LABEL_COLOR = 0xeef2ff; // matches DeliveredEnvironment's own createParcel()
+
 function createStreet() {
   const group = new Group();
   const asphalt = new Mesh(
@@ -178,6 +203,23 @@ function createFigure() {
   return group;
 }
 
+/** Track A5's own parcel -- smaller than Delivered's own resting-hero-prop
+ *  scale (0.9x0.7x0.7), sized to actually be carried by this chapter's
+ *  small capsule-figure. Starts invisible (scale 0); update() reveals it
+ *  once the handoff cycle picks it up, the same scale-reveal idiom every
+ *  other cargo prop in this codebase already uses. */
+function createHandoffParcel() {
+  const group = new Group();
+  const box = new Mesh(new BoxGeometry(0.5, 0.4, 0.4), new MeshStandardMaterial({ color: HANDOFF_PARCEL_COLOR, roughness: 0.55, metalness: 0.1 }));
+  box.castShadow = true;
+  group.add(box);
+  const label = new Mesh(new BoxGeometry(0.28, 0.18, 0.02), new MeshBasicMaterial({ color: HANDOFF_PARCEL_LABEL_COLOR, transparent: true, opacity: 0.5 }));
+  label.position.set(0, 0.02, 0.21);
+  group.add(label);
+  group.scale.setScalar(0);
+  return group;
+}
+
 /** The live routing indicator (Section 23) -- the one practical light in this
  *  chapter, calmer and slower than any pulse since Origin (Section 23:
  *  "deliberately less motion than any chapter since Origin"). */
@@ -262,7 +304,11 @@ export class FinalMileEnvironment {
 
     this.group = new Group();
     this.routeLine = createRouteLine();
-    this.group.add(createStreet(), createHouses(), createVehicle(), createFigure(), this.routeLine);
+    this.figure = createFigure();
+    this.group.add(createStreet(), createHouses(), createVehicle(), this.figure, this.routeLine);
+
+    this.handoffParcel = createHandoffParcel();
+    this.group.add(this.handoffParcel);
 
     const { group: indicatorGroup, light: indicatorLight } = createRoutingIndicator();
     this.indicator = indicatorGroup;
@@ -355,6 +401,44 @@ export class FinalMileEnvironment {
     this.distantAircraft.scale.setScalar(this.neighborBoost);
     const beaconBlink = Math.sin((time.elapsed / DISTANT_AIRCRAFT_BEACON_BLINK_PERIOD_MS) * Math.PI * 2) > 0.5 ? 1 : 0;
     this.distantAircraftBeaconLight.intensity = DISTANT_AIRCRAFT_BEACON_INTENSITY * beaconBlink * this.neighborBoost * this.activityWeight;
+
+    // Track A5: the handoff cycle. Only three distinct figure targets are
+    // needed -- van, door, rest -- the "walk to door" and "pause at door"
+    // beats share the same target (DOOR_POINT), so the ease itself supplies
+    // the pause once the figure actually arrives, the same "target change,
+    // not a hand-computed trajectory" idiom this codebase's dock-cycle
+    // comments already describe explicitly.
+    const handoffCycleT = time.elapsed % HANDOFF_CYCLE_MS;
+    let figureTarget = FIGURE_REST;
+    if (handoffCycleT < HANDOFF_TO_VAN_END) figureTarget = FIGURE_VAN_POINT;
+    else if (handoffCycleT < HANDOFF_AT_DOOR_END) figureTarget = FIGURE_DOOR_POINT;
+
+    const figureMotionT = dampFactor(FIGURE_MOTION_HALF_LIFE_MS, time.delta);
+    this.figure.position.x += (figureTarget.x - this.figure.position.x) * figureMotionT;
+    this.figure.position.z += (figureTarget.z - this.figure.position.z) * figureMotionT;
+
+    // A small walk-bob, only while actually easing toward a target that
+    // isn't already reached -- stays motionless while genuinely at rest,
+    // rather than bobbing forever.
+    const figureRemaining = Math.abs(figureTarget.x - this.figure.position.x) + Math.abs(figureTarget.z - this.figure.position.z);
+    this.figure.position.y = figureRemaining > 0.05 ? Math.abs(Math.sin(time.elapsed / 180)) * 0.03 : 0;
+
+    // Carried from the moment it's picked up at the van through the pause
+    // at the door; visible a little longer than that -- it stays sitting
+    // at the doorstep, detached from the figure, through the whole walk
+    // back, then fades out right as the figure reaches home and the cycle
+    // nears its own rest tail.
+    const carrying = handoffCycleT >= HANDOFF_TO_VAN_END && handoffCycleT < HANDOFF_AT_DOOR_END;
+    const parcelVisible = handoffCycleT >= HANDOFF_TO_VAN_END && handoffCycleT < HANDOFF_RETURN_END;
+    const parcelT = dampFactor(HANDOFF_PARCEL_REVEAL_HALF_LIFE_MS, time.delta);
+    this.handoffParcel.scale.setScalar(
+      this.handoffParcel.scale.x + ((parcelVisible ? 1 : 0) - this.handoffParcel.scale.x) * parcelT
+    );
+    if (carrying) {
+      this.handoffParcel.position.set(this.figure.position.x + 0.3, 0.6, this.figure.position.z + 0.15);
+    } else if (parcelVisible) {
+      this.handoffParcel.position.set(FIGURE_DOOR_POINT.x, 0.2, FIGURE_DOOR_POINT.z);
+    }
   }
 
   setActivity(state) {
