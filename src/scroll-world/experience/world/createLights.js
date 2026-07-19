@@ -1,10 +1,14 @@
 import { DirectionalLight } from 'three';
 
-const ELECTRIC_500 = 0x2f8bff;
-const ROYAL_600 = 0x2540b0;
+// Every caller gets its own real value from shots.js's LIGHT_TINTS
+// immediately at construction (see each EnvironmentJs file's own
+// "Cinematic Polish Phase, Commit 1" comment) -- these two are only the
+// function's own defaults.
+const WARM_GOLD_500 = 0xffb347;
+const WARM_UMBER_600 = 0x3d2f24;
 
 /** Two sources only, never a third (Lighting Bible, Section 12). Key carries
- *  the scene's accent from upper-right; fill carries the constant royal-blue
+ *  the scene's accent from upper-right; fill carries the constant warm-umber
  *  floor from lower-left. Neither is a point/spot falloff light -- both read
  *  as broad, even washes, matching the CSS glow blobs this doctrine was
  *  derived from.
@@ -16,11 +20,11 @@ const ROYAL_600 = 0x2540b0;
  *  exactly, so the existing `createLights()` call in OriginEnvironment is
  *  unchanged. */
 export function createLights({
-  keyColor = ELECTRIC_500,
+  keyColor = WARM_GOLD_500,
   keyIntensity = 3.8,
   keyPosition = [13, 15, 9],
   keyTarget = [0, 1, -16],
-  fillColor = ROYAL_600,
+  fillColor = WARM_UMBER_600,
   fillIntensity = 1.4,
   fillPosition = [-14, 8, -6],
   fillTarget = keyTarget,

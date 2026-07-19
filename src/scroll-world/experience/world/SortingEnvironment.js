@@ -297,8 +297,8 @@ export class SortingEnvironment {
     });
     this.group.add(this.particles);
 
-    // Section 23: "Key light in this chapter's own accent (royal-blue-
-    // leaning), fill in the constant royal blue."
+    // Only this light's initial value -- shots.js's LIGHT_TINTS.sorting
+    // overrides both immediately at construction below.
     const { key, fill } = createLights({
       keyColor: ROYAL_500,
       keyIntensity: 3.4,

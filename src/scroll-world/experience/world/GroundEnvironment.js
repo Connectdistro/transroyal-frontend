@@ -967,8 +967,8 @@ export class GroundEnvironment {
     this.baseExhaustOpacity = this.exhaustParticles.material.opacity;
     this.group.add(this.exhaustParticles);
 
-    // Section 23: "Key light in electric blue, fill in the constant royal
-    // blue."
+    // These two params are only this light's initial value -- shots.js's
+    // LIGHT_TINTS.ground overrides both immediately at construction below.
     const { key, fill } = createLights({
       keyColor: ELECTRIC_500,
       keyIntensity: 3.6,

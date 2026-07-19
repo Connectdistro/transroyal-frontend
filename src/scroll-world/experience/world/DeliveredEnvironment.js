@@ -7,10 +7,13 @@ const DOOR_COLOR = 0x060814;
 const PARCEL_COLOR = 0x141a3a;
 const PARCEL_LABEL_COLOR = 0xeef2ff;
 const PORCH_LIGHT_COLOR = 0xeef2ff;
-// Delivered's own accent from config.js -- the same family as Origin,
-// closing the loop (Section 23).
-const ELECTRIC_500 = 0x2f8bff;
-const ROYAL_600 = 0x2540b0;
+// Delivered has no setLightTint (deliberately excluded from scene-blend.js's
+// crossfade loop -- see that file's own comment), so unlike every other
+// chapter, these two ARE the actual rendered light color, not an initial
+// value something else overrides at construction. Matches shots.js's
+// LIGHT_TINTS.delivered -- rose-gold, closing the loop Origin opened.
+const WARM_GOLD_ROSE = 0xffb380;
+const WARM_UMBER_600 = 0x3d2f28;
 
 // Past Final Mile's furthest house (which sits around z = -740).
 const REGION_Z = -800;
@@ -103,16 +106,15 @@ export class DeliveredEnvironment {
     const { glow: porchGlow, light: porchLight } = createPorchLight();
     this.group.add(porchGlow, porchLight);
 
-    // Section 23: "Key light in electric blue, fill in the constant royal
-    // blue -- the same accent family as Origin, closing the loop." The
-    // lightest haze in the journey alongside Origin -- softer, lower-
-    // intensity lights than any populated chapter, matching this scene's
-    // resolved calm.
+    // Section 23: "Key light in warm rose-gold, fill in warm umber -- the
+    // same accent family as Origin, closing the loop." The lightest haze in
+    // the journey alongside Origin -- softer, lower-intensity lights than
+    // any populated chapter, matching this scene's resolved calm.
     const { key, fill } = createLights({
-      keyColor: ELECTRIC_500,
+      keyColor: WARM_GOLD_ROSE,
       keyIntensity: 2.2,
       keyPosition: [11, 10, REGION_Z + 4],
-      fillColor: ROYAL_600,
+      fillColor: WARM_UMBER_600,
       fillIntensity: 1,
       fillPosition: [-8, 6, REGION_Z - 14],
       keyTarget: [4, 1.5, REGION_Z - 6],

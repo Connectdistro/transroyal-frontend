@@ -2,7 +2,9 @@ import { Color, CubeUVReflectionMapping, EquirectangularReflectionMapping, FogEx
 import { createBackgroundGradient } from './environment/background.js';
 import { dampFactor } from './utils/damp.js';
 
-const ROYAL_600 = '#2540b0';
+// The shared default fog color -- matches LIGHT_TINTS' own fill family in
+// shots.js.
+const WARM_UMBER_600 = '#3d2f24';
 // Tuned to Origin's own spec (Section 23: "the lightest haze in the entire
 // journey... maximum clarity") -- the shared default, adjustable at runtime
 // via setFogDensity() once later chapters need a heavier reading.
@@ -52,7 +54,7 @@ export class Environment {
     this.scene.background = this.backgroundTexture;
   }
 
-  setFog(color = ROYAL_600, density = DEFAULT_FOG_DENSITY) {
+  setFog(color = WARM_UMBER_600, density = DEFAULT_FOG_DENSITY) {
     this.fog = new FogExp2(color, density);
     this.scene.fog = this.fog;
     // Blend targets -- see update(). Initialized to match the live values
@@ -92,7 +94,7 @@ export class Environment {
    *  look every other chapter shares. Still routes through the two setters
    *  above, so the return trip blends just like any other fog change. */
   resetFog() {
-    this.setFogColor(ROYAL_600);
+    this.setFogColor(WARM_UMBER_600);
     this.setFogDensity(DEFAULT_FOG_DENSITY);
   }
 

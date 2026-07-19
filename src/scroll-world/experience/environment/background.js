@@ -1,14 +1,15 @@
 import { CanvasTexture, SRGBColorSpace } from 'three';
 
-const NAVY_950 = '#05081f';
-const NAVY_900 = '#080f50';
+// Dark and desaturated enough to stay recessive behind every chapter's own
+// lit foreground, matching the world's warm gold/amber lighting doctrine
+// (shots.js's LIGHT_TINTS).
+const UMBER_950 = '#120d08';
+const UMBER_900 = '#2e1f10';
 
 /**
- * A vertical navy gradient baked once into a CanvasTexture and set as
+ * A vertical warm gradient baked once into a CanvasTexture and set as
  * `scene.background` -- the renderer's own background (Production Handbook
- * Section 10), never a CSS layer. Mirrors the brand's existing gradient
- * stops (navy-950 -> navy-900 -> navy-950) so the WebGL world and the DOM
- * interface share one background language.
+ * Section 10), never a CSS layer.
  */
 export function createBackgroundGradient() {
   const canvas = document.createElement('canvas');
@@ -17,9 +18,9 @@ export function createBackgroundGradient() {
 
   const context = canvas.getContext('2d');
   const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
-  gradient.addColorStop(0, NAVY_950);
-  gradient.addColorStop(0.45, NAVY_900);
-  gradient.addColorStop(1, NAVY_950);
+  gradient.addColorStop(0, UMBER_950);
+  gradient.addColorStop(0.45, UMBER_900);
+  gradient.addColorStop(1, UMBER_950);
   context.fillStyle = gradient;
   context.fillRect(0, 0, canvas.width, canvas.height);
 

@@ -22,25 +22,23 @@
 // which stay exactly as specified regardless of drift.
 export const DEFAULT_DRIFT = { amplitude: 0.25, speed: 1, axis: { x: 1, y: 0.6, z: 0 } };
 
-// Cinematic Polish Phase, Commit 1: per-chapter target key/fill light tint,
-// crossfaded continuously by scene-blend.js as the visitor approaches or
-// leaves a chapter (Goal 6's "lighting evolves, never switches"). Values
-// are deliberately still within the brand's existing electric/royal-blue
-// family (createLights.js's own "two sources... never a third" doctrine is
-// a fixed identity constraint, not something this phase repaints) --
-// "sunrise/golden/sunset" is expressed as a subtle warm bias within that
-// family, "cool blue atmosphere" as a subtle cool bias, rather than a
-// literal orange-to-blue repaint. `air`'s tint intentionally matches its
-// own existing fog override color (0x4a63a8) for continuity between the
-// two already-related atmospheric properties.
+// Per-chapter target key/fill light tint, crossfaded continuously by
+// scene-blend.js as the visitor approaches or leaves a chapter (Goal 6's
+// "lighting evolves, never switches"). Key is warm gold/amber, varying per
+// chapter along the sunrise-to-sunset arc each label names; fill is a warm
+// dark umber shadow tone. 0xffb347 (pickup's key) is this codebase's own
+// existing accent color for Air's engine glow/destination marker, reused
+// here rather than a new hex. `air`'s tint matches its own fog override
+// color below, for continuity between the two related atmospheric
+// properties.
 export const LIGHT_TINTS = {
-  origin: { key: 0x5a8fff, fill: 0x3a52c2 }, // warm sunrise
-  pickup: { key: 0x4fa3ff, fill: 0x2f4fc0 }, // bright morning
-  sorting: { key: 0x3f6fe0, fill: 0x2540b0 }, // industrial neutral
-  ground: { key: 0x5a8fe0, fill: 0x3654d6 }, // golden afternoon
-  air: { key: 0x4a63a8, fill: 0x2540b0 }, // cool blue atmosphere
-  'final-mile': { key: 0x4a7fe0, fill: 0x2f4fc0 }, // late-afternoon warmth
-  delivered: { key: 0x5a8fff, fill: 0x2f4fc0 }, // warm sunset, echoes origin
+  origin: { key: 0xffcf9e, fill: 0x4a3830 }, // warm sunrise -- palest, pinkest gold
+  pickup: { key: 0xffb347, fill: 0x45362c }, // bright morning -- clear gold
+  sorting: { key: 0xe8a05c, fill: 0x3a2f28 }, // industrial neutral -- desaturated amber
+  ground: { key: 0xff9642, fill: 0x4a3624 }, // golden afternoon -- deeper gold-orange
+  air: { key: 0xffd9ab, fill: 0x453c30 }, // high-altitude haze -- pale warm gold, not blue
+  'final-mile': { key: 0xff8c42, fill: 0x40301f }, // late-afternoon warmth -- deep orange, low sun
+  delivered: { key: 0xffb380, fill: 0x3d2f28 }, // warm sunset, echoes origin -- rose-gold
 };
 
 export const SHOTS = {
@@ -113,7 +111,9 @@ export const SHOTS = {
     // larger distances to flat fog color well before the horizon. Lighter
     // and less dense here reads as true-altitude haze instead of a solid
     // wash -- restored to the shared default by camera-sync.js on leaving.
-    fog: { color: 0x4a63a8, density: 0.006 },
+    // Matches this shot's own LIGHT_TINTS.air key above -- a pale warm gold
+    // haze.
+    fog: { color: 0xd9b98a, density: 0.006 },
     // The journey's most expansive beat -- larger, slightly quicker sway,
     // matching this shot's own already-larger scale.
     drift: { amplitude: 0.5, speed: 1.2 },

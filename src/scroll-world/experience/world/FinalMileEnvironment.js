@@ -338,8 +338,9 @@ export class FinalMileEnvironment {
     });
     this.group.add(this.particles);
 
-    // Section 23: "Key light in royal-blue-leaning accent, fill in the
-    // constant royal blue."
+    // These two params are only this light's initial value -- shots.js's
+    // LIGHT_TINTS['final-mile'] overrides both immediately at construction
+    // below.
     const { key, fill } = createLights({
       keyColor: ROYAL_500,
       keyIntensity: 2.6,

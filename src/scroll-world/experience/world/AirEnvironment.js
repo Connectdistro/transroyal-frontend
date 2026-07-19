@@ -528,8 +528,10 @@ export class AirEnvironment {
     this.flapAngle = 0;
     this.taxiLightIntensity = 0;
 
-    // Section 23: key electric blue, fill constant royal blue, "both read at
-    // greater distance and softer falloff than any other chapter."
+    // Section 23: "both read at greater distance and softer falloff than
+    // any other chapter." These two params are only this light's initial
+    // value -- shots.js's LIGHT_TINTS.air overrides both immediately at
+    // construction below.
     const { key, fill } = createLights({
       keyColor: ELECTRIC_400,
       keyIntensity: 0.9,

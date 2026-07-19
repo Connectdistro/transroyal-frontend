@@ -374,8 +374,8 @@ export class PickupEnvironment {
     });
     this.group.add(this.particles);
 
-    // Section 23: "Key light in this chapter's own accent (electric blue,
-    // brighter register), fill in the constant royal blue."
+    // These params are only this light's initial value -- shots.js's
+    // LIGHT_TINTS.pickup overrides both immediately at construction below.
     const { key, fill } = createLights({
       keyIntensity: 2.6,
       keyPosition: [1, 14, REGION_Z + 22],
