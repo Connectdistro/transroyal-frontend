@@ -1,6 +1,6 @@
 import { BoxGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial } from 'three';
 
-const STRUCTURE_COLOR = 0x0a1030;
+const STRUCTURE_COLOR = 0x565b66;
 const WALKWAY_WIDTH = 14;
 const WALKWAY_Y = 9;
 const WALKWAY_Z = -34;

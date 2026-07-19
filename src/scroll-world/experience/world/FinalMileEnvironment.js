@@ -19,9 +19,9 @@ import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR, LIGHT_TINT_H
 import { LIGHT_TINTS } from '../camera/shots.js';
 import { varyMaterial } from './materialVariation.js';
 
-const STREET_COLOR = 0x070a26;
-const HOUSE_COLOR = 0x0a1030;
-const VEHICLE_COLOR = 0x0d1440;
+const STREET_COLOR = 0x232428;
+const HOUSE_COLOR = 0x565b66;
+const VEHICLE_COLOR = 0xd6dae0;
 const RUBBER_COLOR = 0x05070f;
 const WINDOW_COLOR = 0xeef2ff;
 // Final Mile's own accent from config.js (royal-blue-leaning, matching Sorting).
@@ -102,7 +102,7 @@ function createStreet() {
 function createHouse(x, z, scale, seed = 0) {
   const group = new Group();
   const bodyMaterial = new MeshStandardMaterial({ color: HOUSE_COLOR, roughness: 0.65, metalness: 0.2 });
-  const roofMaterial = new MeshStandardMaterial({ color: 0x060814, roughness: 0.7, metalness: 0.15 });
+  const roofMaterial = new MeshStandardMaterial({ color: 0x121316, roughness: 0.7, metalness: 0.15 });
   const windowMaterial = new MeshBasicMaterial({ color: WINDOW_COLOR, transparent: true, opacity: 0.55 });
   // Choreography Refinement Pass: each house already gets its own fresh
   // material instances (declared inside this per-call function, never
@@ -188,7 +188,7 @@ function createVehicle() {
 
 function createFigure() {
   const group = new Group();
-  const clothingMaterial = new MeshStandardMaterial({ color: 0x141a3a, roughness: 0.7, metalness: 0.1 });
+  const clothingMaterial = new MeshStandardMaterial({ color: 0x2a2e36, roughness: 0.7, metalness: 0.1 });
   const skinMaterial = new MeshStandardMaterial({ color: SKIN_TONE, roughness: 0.6, metalness: 0 });
   varyMaterial(clothingMaterial, 941);
   varyMaterial(skinMaterial, 942);

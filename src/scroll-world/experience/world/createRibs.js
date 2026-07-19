@@ -1,7 +1,7 @@
 import { BoxGeometry, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial } from 'three';
 import { varyMaterial } from './materialVariation.js';
 
-const STRUCTURE_COLOR = 0x0a1030;
+const STRUCTURE_COLOR = 0x565b66;
 const ELECTRIC_500 = 0x2f8bff;
 
 const RIB_COUNT = 7;

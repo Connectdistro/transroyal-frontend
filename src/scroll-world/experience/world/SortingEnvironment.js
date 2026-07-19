@@ -17,9 +17,9 @@ import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR, LIGHT_TINT_H
 import { LIGHT_TINTS } from '../camera/shots.js';
 import { varyMaterial } from './materialVariation.js';
 
-const STRUCTURE_COLOR = 0x0a1030;
-const FLOOR_COLOR = 0x080d33;
-const BELT_COLOR = 0x0d1440;
+const STRUCTURE_COLOR = 0x565b66;
+const FLOOR_COLOR = 0x232428;
+const BELT_COLOR = 0x121316;
 // Sorting's own accent from config.js (royal-blue-leaning), reused as the key
 // light color so the 3D chapter and its CSS wayfinding stay in sync.
 const ROYAL_500 = 0x3654d6;
@@ -225,7 +225,7 @@ function createFloorDetail() {
     });
   });
 
-  const panelMaterial = new MeshStandardMaterial({ color: 0x0c1338, roughness: 0.5, metalness: 0.3 });
+  const panelMaterial = new MeshStandardMaterial({ color: 0x121316, roughness: 0.5, metalness: 0.3 });
   const panelEdgeMaterial = new MeshBasicMaterial({ color: ROYAL_500 });
   CONVEYOR_X.forEach((x) => {
     const panel = new Mesh(new BoxGeometry(1.6, 0.7, 0.1), panelMaterial);

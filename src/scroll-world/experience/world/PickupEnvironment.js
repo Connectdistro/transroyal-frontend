@@ -19,10 +19,10 @@ import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR, LIGHT_TINT_H
 import { LIGHT_TINTS } from '../camera/shots.js';
 import { varyMaterial } from './materialVariation.js';
 
-const DOCK_COLOR = 0x080d33;
-const STRUCTURE_COLOR = 0x0a1030;
-const BAY_COLOR = 0x020410;
-const VEHICLE_COLOR = 0x0c1338;
+const DOCK_COLOR = 0x232428;
+const STRUCTURE_COLOR = 0x565b66;
+const BAY_COLOR = 0x121316;
+const VEHICLE_COLOR = 0xd6dae0;
 const RUBBER_COLOR = 0x05070f;
 const ELECTRIC_500 = 0x2f8bff;
 const ELECTRIC_400 = 0x4fa3ff;
@@ -302,7 +302,7 @@ function createGroundDetail() {
     group.add(patch);
   });
 
-  const panelMaterial = new MeshStandardMaterial({ color: 0x0c1338, roughness: 0.5, metalness: 0.3 });
+  const panelMaterial = new MeshStandardMaterial({ color: 0x121316, roughness: 0.5, metalness: 0.3 });
   const panelEdgeMaterial = new MeshBasicMaterial({ color: ELECTRIC_400 });
   const panel = new Mesh(new BoxGeometry(2.4, 1, 0.15), panelMaterial);
   const panelEdge = new Mesh(new BoxGeometry(2.6, 1.2, 0.08), panelEdgeMaterial);

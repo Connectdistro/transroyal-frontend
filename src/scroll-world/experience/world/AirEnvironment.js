@@ -17,8 +17,8 @@ import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR, LIGHT_TINT_H
 import { LIGHT_TINTS } from '../camera/shots.js';
 import { varyMaterial } from './materialVariation.js';
 
-const LANDMASS_COLOR = 0x070b28;
-const BLOCK_COLOR = 0x0a1030;
+const LANDMASS_COLOR = 0x14151a;
+const BLOCK_COLOR = 0x2a2d33;
 const CLOUD_COLOR = 0xeef2ff;
 // Air's own accent from config.js.
 const ELECTRIC_400 = 0x4fa3ff;

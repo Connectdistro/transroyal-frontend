@@ -19,8 +19,8 @@ import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR, LIGHT_TINT_H
 import { LIGHT_TINTS } from '../camera/shots.js';
 import { varyMaterial } from './materialVariation.js';
 
-const ASPHALT_COLOR = 0x070a24;
-const HUB_COLOR = 0x0a1030;
+const ASPHALT_COLOR = 0x232428;
+const HUB_COLOR = 0x565b66;
 const RUBBER_COLOR = 0x05070f;
 // Ground's own accent from config.js.
 const ELECTRIC_500 = 0x2f8bff;
@@ -200,8 +200,8 @@ function createDockBuilding() {
   const group = new Group();
   const wallMaterial = new MeshStandardMaterial({ color: HUB_COLOR, roughness: 0.7, metalness: 0.2 });
   varyMaterial(wallMaterial, 101);
-  const roofMaterial = new MeshStandardMaterial({ color: 0x060812, roughness: 0.8, metalness: 0.1 });
-  const backdropMaterial = new MeshBasicMaterial({ color: 0x02030a });
+  const roofMaterial = new MeshStandardMaterial({ color: 0x121316, roughness: 0.8, metalness: 0.1 });
+  const backdropMaterial = new MeshBasicMaterial({ color: 0x0a0a0c });
   const platformMaterial = new MeshPhysicalMaterial({ color: ASPHALT_COLOR, roughness: 0.85, metalness: 0.1, clearcoat: 0 });
 
   // Main warehouse block -- tall, establishes the building's real height.
@@ -231,7 +231,7 @@ function createDockBuilding() {
   // believable "open dock door" without new geometry per frame.
   const doorBackdrop = new Mesh(new BoxGeometry(4, 5, 0.3), backdropMaterial);
   doorBackdrop.position.set(-3, 2.5, 7);
-  const door = new Mesh(new BoxGeometry(4, 5, 0.2), new MeshStandardMaterial({ color: 0x141a3a, roughness: 0.5, metalness: 0.3 }));
+  const door = new Mesh(new BoxGeometry(4, 5, 0.2), new MeshStandardMaterial({ color: 0x121316, roughness: 0.5, metalness: 0.3 }));
   door.position.set(-3, 2.5, 7.2);
   group.add(doorBackdrop, door);
 
@@ -289,7 +289,7 @@ function createDockBuilding() {
 function createDockLighting() {
   const group = new Group();
 
-  const fixtureMaterial = new MeshStandardMaterial({ color: 0x0a0d1a, roughness: 0.5, metalness: 0.4 });
+  const fixtureMaterial = new MeshStandardMaterial({ color: 0x121316, roughness: 0.5, metalness: 0.4 });
   const floodFixture = new Mesh(new BoxGeometry(0.6, 0.2, 0.3), fixtureMaterial);
   floodFixture.position.set(-3, 5.1, 6.8);
   const floodlight = new PointLight(0xdce8ff, 2.2, 10, 2);
@@ -308,7 +308,7 @@ function createDockLighting() {
     return win;
   });
 
-  const cableMaterial = new MeshStandardMaterial({ color: 0x0a0d1a, roughness: 0.6, metalness: 0.3 });
+  const cableMaterial = new MeshStandardMaterial({ color: 0x121316, roughness: 0.6, metalness: 0.3 });
   const cable = new Mesh(new CylinderGeometry(0.03, 0.03, 1.4, 6), cableMaterial);
   cable.position.set(1.5, 4.6, 7.3);
   cable.geometry.translate(0, -0.7, 0); // pivot at the top end, for a pendulum sway
@@ -330,7 +330,7 @@ function createDockLighting() {
 function createYardSignage() {
   const group = new Group();
   const chevronMaterial = new MeshBasicMaterial({ color: OFFWHITE_100, transparent: true, opacity: 0.55 });
-  const panelMaterial = new MeshStandardMaterial({ color: 0x0c1338, roughness: 0.5, metalness: 0.3 });
+  const panelMaterial = new MeshStandardMaterial({ color: 0x121316, roughness: 0.5, metalness: 0.3 });
   const panelEdgeMaterial = new MeshBasicMaterial({ color: ELECTRIC_400 });
 
   [0, 3.4].forEach((offsetZ, i) => {
@@ -367,10 +367,10 @@ function createYardSignage() {
 function createDockYard() {
   const group = new Group();
 
-  const dockTruck = createTruck(0x101736, 40);
+  const dockTruck = createTruck(0xd8dce2, 40);
   dockTruck.position.set(DOCK_CENTER_X - 3, 0, DOCK_CENTER_Z + 14);
   dockTruck.rotation.y = Math.PI;
-  const queuedTruck = createTruck(0x0d1230, 41);
+  const queuedTruck = createTruck(0xc8ccd4, 41);
   queuedTruck.position.set(DOCK_CENTER_X - 3, 0, DOCK_CENTER_Z + 30);
   queuedTruck.rotation.y = Math.PI;
   group.add(dockTruck, queuedTruck);
@@ -484,7 +484,7 @@ function createForklift(seed) {
   // capsule reads as seated at this abstraction level -- no separate
   // seated-pose geometry needed), duplicated hex values per this
   // codebase's own sibling-environment-file independence convention.
-  const operatorClothingMaterial = new MeshStandardMaterial({ color: 0x141a3a, roughness: 0.7, metalness: 0.1 });
+  const operatorClothingMaterial = new MeshStandardMaterial({ color: 0x2a2e36, roughness: 0.7, metalness: 0.1 });
   const operatorSkinMaterial = new MeshStandardMaterial({ color: 0xc48a6a, roughness: 0.6, metalness: 0 });
   varyMaterial(operatorClothingMaterial, seed + 10);
   varyMaterial(operatorSkinMaterial, seed + 11);
@@ -693,7 +693,7 @@ function createTruck(color, seed = 0) {
 function createFleet() {
   const group = new Group();
   const trucks = [];
-  const colors = [0x0c1338, 0x0e1642, 0x0a102e];
+  const colors = [0xd2d6dc, 0xdde1e6, 0xc4c8d0];
 
   LANE_X.forEach((x, i) => {
     const truck = createTruck(colors[i % colors.length], i);
@@ -773,7 +773,7 @@ function createYardMarkings() {
   });
 
   // Dock bumpers at the dock face itself.
-  const bumperMaterial = new MeshStandardMaterial({ color: 0x141a3a, roughness: 0.6, metalness: 0.2 });
+  const bumperMaterial = new MeshStandardMaterial({ color: 0x121316, roughness: 0.6, metalness: 0.2 });
   [-4.3, -1.7].forEach((x) => {
     const bumper = new Mesh(new CylinderGeometry(0.15, 0.15, 0.8, 8), bumperMaterial);
     bumper.rotation.z = Math.PI / 2;
@@ -789,9 +789,9 @@ function createYardMarkings() {
 function createYardSafety() {
   const group = new Group();
   const coneMaterial = new MeshStandardMaterial({ color: 0xd8621a, roughness: 0.55, metalness: 0 });
-  const bollardMaterial = new MeshStandardMaterial({ color: 0x0c1338, roughness: 0.5, metalness: 0.3 });
+  const bollardMaterial = new MeshStandardMaterial({ color: 0x121316, roughness: 0.5, metalness: 0.3 });
   const bollardBandMaterial = new MeshBasicMaterial({ color: OFFWHITE_100 });
-  const fenceMaterial = new MeshStandardMaterial({ color: 0x141a3a, roughness: 0.6, metalness: 0.35 });
+  const fenceMaterial = new MeshStandardMaterial({ color: 0x121316, roughness: 0.6, metalness: 0.35 });
   const fireBoxMaterial = new MeshStandardMaterial({ color: 0x8a1c1c, roughness: 0.5, metalness: 0.2 });
   const fireBoxEdge = new MeshBasicMaterial({ color: OFFWHITE_100 });
 
@@ -913,7 +913,9 @@ export class GroundEnvironment {
     // dock trucks already build) rather than a bespoke shape -- this
     // chapter's existing vocabulary is already the right scale/silhouette
     // for a yard service vehicle.
-    this.serviceVehicle = createTruck(0x1a2440, 60);
+    // Kept a distinct dark graphite rather than the branded fleet's light
+    // livery -- a yard utility vehicle, not part of the main fleet.
+    this.serviceVehicle = createTruck(0x3a3e46, 60);
     this.serviceVehicle.position.set(DOCK_CENTER_X + 9, 0, DOCK_CENTER_Z + 4);
     this.serviceVehicle.rotation.y = Math.PI / 2;
     this.serviceVehicle.userData.baseX = this.serviceVehicle.position.x;

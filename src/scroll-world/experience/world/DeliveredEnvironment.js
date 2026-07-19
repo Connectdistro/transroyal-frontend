@@ -1,9 +1,9 @@
 import { BoxGeometry, Group, Mesh, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, PointLight, SphereGeometry } from 'three';
 import { createLights } from './createLights.js';
 
-const STEP_COLOR = 0x080d33;
-const FACADE_COLOR = 0x0a1030;
-const DOOR_COLOR = 0x060814;
+const STEP_COLOR = 0x232428;
+const FACADE_COLOR = 0x565b66;
+const DOOR_COLOR = 0x121316;
 const PARCEL_COLOR = 0x141a3a;
 const PARCEL_LABEL_COLOR = 0xeef2ff;
 const PORCH_LIGHT_COLOR = 0xeef2ff;
