@@ -22,6 +22,10 @@ export class Experience {
     this.time = new Time();
     this.scene = new Scene();
     this.resources = new Resources(this);
+    // Composition-only -- describes what's registered, triggers no loading
+    // (see Resources.printManifestSummary()'s own doc for why that's safe
+    // to call unconditionally here).
+    this.resources.printManifestSummary();
     this.camera = new CameraRig(this);
     this.renderer = new Renderer(this);
     this.world = new World(this);
