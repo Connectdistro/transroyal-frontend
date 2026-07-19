@@ -1,4 +1,5 @@
 import {
+  Box3,
   BoxGeometry,
   CatmullRomCurve3,
   CylinderGeometry,
@@ -136,6 +137,39 @@ const TAXI_LIGHT_BASE_INTENSITY = 2.2;
 const ENGINE_GLOW_COLOR = 0xffb347;
 const ENGINE_GLOW_MAX_OPACITY = 0.7;
 
+// Asset Integration Phase, Air Chapter Commit 1: the real cargoPlane GLB
+// (manifest id `cargoPlane`) replaces the procedural hull once it loads.
+// Confirmed live in the Asset Gallery before writing this: the model's nose
+// points toward +Z and its own local origin sits ~8 units off its true
+// geometric center -- the opposite of this file's own "-Z is forward,
+// origin at the hull's center" convention that lookAt()/rotateX()/rotateZ()
+// all assume every frame. CARGO_PLANE_MODEL_ROTATION_Y and the recenter in
+// applyCargoPlaneModel() correct both before the model ever joins the
+// aircraft group, so none of the existing flight/banking/pitch code below
+// needs to know a swap happened.
+//
+// CARGO_PLANE_MODEL_SCALE matches the loaded model's raw wingspan (60.18
+// units, confirmed via a full vertex-bounds check) to the procedural hull's
+// own pre-group-scale wingspan (24, from the `wings` BoxGeometry below) --
+// the dimension the `air` shot's framing was actually verified against, so
+// the aircraft keeps reading at the same size in-frame post-swap. The real
+// model's proportions aren't the procedural hull's simplified ones (a real
+// C-17's length is close to its wingspan; the procedural hull was
+// deliberately squashed shorter), so gear/flap/light attachment offsets
+// below are widened by CARGO_PLANE_LENGTH_RATIO along Z to track the real,
+// more elongated fuselage rather than sitting tuned for the old boxy one.
+const CARGO_PLANE_MODEL_ROTATION_Y = Math.PI;
+const CARGO_PLANE_MODEL_SCALE = 24 / 60.18;
+const CARGO_PLANE_LENGTH_RATIO = 1.28;
+// Same reasoning as CARGO_PLANE_LENGTH_RATIO, for the vertical axis. The
+// real hull's centered half-height works out to ~3.84 units at
+// CARGO_PLANE_MODEL_SCALE versus the procedural fuselage's 1.6, so a
+// literal ratio (2.4) was tried first -- verified live, it pushed the
+// cargo pod/gear/taxi light far enough below the hull to read as visually
+// detached rather than attached. This smaller value is a deliberately
+// conservative compromise, verified live in its place.
+const CARGO_PLANE_HEIGHT_RATIO = 1.3;
+
 // Module-scope scratch vectors, reused every frame (never reallocated) as
 // `optionalTarget` args to Curve.getPointAt()/getTangentAt() -- Goal 9's
 // zero-per-frame-allocation rule.
@@ -259,9 +293,9 @@ function createLandingGear() {
   const strutMaterial = new MeshStandardMaterial({ color: ENGINE_COLOR, roughness: 0.5, metalness: 0.5 });
   const wheelMaterial = new MeshStandardMaterial({ color: 0x14181f, roughness: 0.7, metalness: 0.2 });
   const legs = [
-    [0, -2.4, -7], // nose gear
-    [-2.6, -2.6, 1], // left main gear
-    [2.6, -2.6, 1], // right main gear
+    [0, -2.4 * CARGO_PLANE_HEIGHT_RATIO, -7 * CARGO_PLANE_LENGTH_RATIO], // nose gear
+    [-2.6, -2.6 * CARGO_PLANE_HEIGHT_RATIO, 1 * CARGO_PLANE_LENGTH_RATIO], // left main gear
+    [2.6, -2.6 * CARGO_PLANE_HEIGHT_RATIO, 1 * CARGO_PLANE_LENGTH_RATIO], // right main gear
   ];
   legs.forEach(([x, y, z]) => {
     const strut = new Mesh(new CylinderGeometry(0.08, 0.08, 1.2, 6), strutMaterial);
@@ -327,15 +361,17 @@ function createCargoAircraft() {
   // a value already computed every frame, no new state.
   const engineGlowMaterial = new MeshBasicMaterial({ color: ENGINE_GLOW_COLOR, transparent: true, opacity: 0 });
   const engineGlows = [];
+  const engines = [];
   [-6, 6].forEach((x) => {
     const engine = new Mesh(engineGeometry, wingMaterial);
     engine.rotation.x = Math.PI / 2;
     engine.position.set(x, -1, 0.6);
     group.add(engine);
+    engines.push(engine);
 
     const glow = new Mesh(new CylinderGeometry(0.45, 0.45, 0.05, 10), engineGlowMaterial);
     glow.rotation.x = Math.PI / 2;
-    glow.position.set(x, -1, 1.95);
+    glow.position.set(x, -1, 1.95 * CARGO_PLANE_LENGTH_RATIO);
     group.add(glow);
     engineGlows.push(glow);
   });
@@ -343,7 +379,7 @@ function createCargoAircraft() {
   const cargoPodMaterial = new MeshStandardMaterial({ color: CARGO_POD_COLOR, roughness: 0.5, metalness: 0.3 });
   varyMaterial(cargoPodMaterial, 701);
   const cargoPod = new Mesh(new BoxGeometry(2.2, 1.5, 6), cargoPodMaterial);
-  cargoPod.position.set(0, -2.1, -1);
+  cargoPod.position.set(0, -2.1 * CARGO_PLANE_HEIGHT_RATIO, -1 * CARGO_PLANE_LENGTH_RATIO);
   group.add(cargoPod);
 
   // Logistics Choreography Phase, Commit 5: trailing-edge flaps, one per
@@ -352,7 +388,7 @@ function createCargoAircraft() {
   // spinning around its own center.
   const flapGroups = [-8, 8].map((x) => {
     const flapGroup = new Group();
-    flapGroup.position.set(x, -0.3, 2.2);
+    flapGroup.position.set(x, -0.3, 2.2 * CARGO_PLANE_LENGTH_RATIO);
     const flap = new Mesh(new BoxGeometry(6, 0.12, 1.4), wingMaterial);
     flap.position.set(0, 0, 0.7);
     flapGroup.add(flap);
@@ -370,13 +406,19 @@ function createCargoAircraft() {
   // taxi/landing light (brightness ramped in update() during the low-
   // altitude departure/approach windows, dim at cruise).
   const beacon = new Mesh(new SphereGeometry(0.14, 8, 8), new MeshBasicMaterial({ color: BEACON_COLOR }));
-  beacon.position.set(0, 1.75, 2);
-  const beaconLight = new PointLight(BEACON_COLOR, 0, 4, 2);
+  beacon.position.set(0, 1.75 * CARGO_PLANE_HEIGHT_RATIO, 2 * CARGO_PLANE_LENGTH_RATIO);
+  // `distance` (this constructor's 3rd arg) is the light's own falloff
+  // radius -- left at its original value, it's now small relative to the
+  // real hull's larger surfaces, producing a tight, hard-edged specular
+  // hotspot on nearby geometry instead of the soft point-source glow it
+  // read as against the procedural hull (confirmed live). Scaled by the
+  // same length ratio as everything else positioned relative to the hull.
+  const beaconLight = new PointLight(BEACON_COLOR, 0, 4 * CARGO_PLANE_LENGTH_RATIO, 2);
   beaconLight.position.copy(beacon.position);
   group.add(beacon, beaconLight);
 
-  const taxiLight = new PointLight(TAXI_LIGHT_COLOR, 0, 6, 2);
-  taxiLight.position.set(0, -0.5, -9.8);
+  const taxiLight = new PointLight(TAXI_LIGHT_COLOR, 0, 6 * CARGO_PLANE_LENGTH_RATIO, 2);
+  taxiLight.position.set(0, -0.5 * CARGO_PLANE_HEIGHT_RATIO, -9.8 * CARGO_PLANE_LENGTH_RATIO);
   group.add(taxiLight);
 
   group.userData.wings = wings;
@@ -386,12 +428,78 @@ function createCargoAircraft() {
   group.userData.engineGlowMaterial = engineGlowMaterial;
   group.userData.beaconLight = beaconLight;
   group.userData.taxiLight = taxiLight;
+  // Asset Integration Phase, Air Chapter Commit 1: the raw hull primitives
+  // only -- everything the real cargoPlane GLB's own detailed mesh already
+  // depicts once it loads (fuselage, nose, flat-box wings/tail, engine
+  // nacelles). cargoPod/flapGroups/gear/lights are NOT in this list -- they
+  // stay visible as procedural attachments layered onto the real hull (see
+  // applyCargoPlaneModel()), since the static GLB has no rig of its own for
+  // any of them and the cargo pod is a deliberate narrative element, not
+  // hull geometry.
+  group.userData.hullMeshes = [fuselage, nose, wings, tailVertical, tailHorizontal, ...engines];
   // Real cruising-altitude framing dwarfs a literal-scale fuselage against
   // the 340-unit landmass -- scaled up so the aircraft reads as the frame's
   // hero object (Section: camera stays put, "aircraft remains the hero"),
   // verified against the actual `air` shot rather than guessed.
   group.scale.setScalar(2);
   return group;
+}
+
+/** Asset Integration Phase, Air Chapter Commit 1: swaps the procedural hull
+ *  primitives for the real cargoPlane GLB once it loads, without touching
+ *  any of the flight/banking/pitch/gear/flap/light code above -- all of
+ *  that reads `this.aircraft`'s own transform and its `userData` children,
+ *  neither of which change identity here.
+ *
+ *  `scene` arrives fresh from Resources.clone() with whatever pivot/facing
+ *  its source file happened to author (confirmed live in the Asset
+ *  Gallery: nose at +Z, origin offset from the true geometric center) --
+ *  three nested groups correct that without fighting matrix-composition
+ *  order on a single object: `recenter` shifts the model so its own bbox
+ *  center sits at local origin (a pure translation, unrotated); `flip`
+ *  then rotates that already-centered pivot 180 deg around Y so the nose
+ *  ends up at -Z, matching every other object in this file; `container`
+ *  applies the uniform scale. The result behaves exactly like the
+ *  procedural hull it replaces: centered at local origin, nose at -Z. */
+function applyCargoPlaneModel(aircraftGroup, scene) {
+  // The source file's own rear cargo-ramp part ("DropDoor") is authored
+  // ~11 units below the main body in its raw coordinate space -- after
+  // this function's scale it reads as a strange dangling appendage rather
+  // than an integrated part of the hull (confirmed live). Removed outright
+  // (not just hidden) before computing the bounding box below -- Box3's
+  // own traversal ignores `.visible` and would still skew the box toward
+  // wherever the drop door sits otherwise. Collected first, then removed
+  // in a separate pass -- mutating each node's parent.children mid-
+  // traverse() would disrupt that same array's own iteration.
+  const dropDoors = [];
+  scene.traverse((child) => {
+    if (child.name.toLowerCase().includes('dropdoor')) dropDoors.push(child);
+  });
+  dropDoors.forEach((node) => node.parent?.remove(node));
+
+  const box = new Box3().setFromObject(scene);
+  const center = box.getCenter(new Vector3());
+
+  const recenter = new Group();
+  scene.position.sub(center);
+  recenter.add(scene);
+
+  const flip = new Group();
+  flip.rotation.y = CARGO_PLANE_MODEL_ROTATION_Y;
+  flip.add(recenter);
+
+  const container = new Group();
+  container.scale.setScalar(CARGO_PLANE_MODEL_SCALE);
+  container.add(flip);
+
+  scene.traverse((child) => {
+    if (child.isMesh) child.castShadow = true;
+  });
+
+  aircraftGroup.userData.hullMeshes.forEach((mesh) => {
+    mesh.visible = false;
+  });
+  aircraftGroup.add(container);
 }
 
 /** A small, modest "shipment leaves the hub" beat near the flight path's
@@ -505,6 +613,19 @@ export class AirEnvironment {
     this.aircraft.lookAt(this.flightPath.getPointAt(0.01));
     this.group.add(this.aircraft);
     this.group.add(createOriginVignette());
+
+    // Asset Integration Phase, Air Chapter Commit 1: the procedural hull
+    // built above renders immediately (no blank hero object while this
+    // loads) and stays the visual until the real GLB is ready, then
+    // applyCargoPlaneModel() hides the hull primitives and attaches the
+    // real mesh in their place. `preload: false` in the manifest means this
+    // is the first thing that ever requests it -- resources.load() caches
+    // after, so re-entering this chapter later is instant.
+    this.experience.resources.load('cargoPlane').then(() => {
+      const clone = this.experience.resources.clone('cargoPlane');
+      if (!clone) return;
+      applyCargoPlaneModel(this.aircraft, clone.scene);
+    });
 
     // Commit 2: the progressive delivery thread and destination marker,
     // both built from this.flightPath -- the same curve instance, never a
