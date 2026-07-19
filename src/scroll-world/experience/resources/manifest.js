@@ -69,7 +69,16 @@ export const MANIFEST = [
   // model mislabeled as a building; it has since been removed from disk and
   // replaced with this real headquarters asset.
   { id: 'headquartersA', type: 'gltf', path: `${BASE}models/buildings/headquarters/government_headquarters_fbx_b350821573201063a0.glb`, group: 'buildings', preload: false },
+  // Requires the KHR_materials_pbrSpecularGlossiness extension (confirmed
+  // via its own extensionsRequired) -- this three.js version (0.185) has
+  // dropped support for it entirely, including the old deprecated/ loader
+  // path, so it loads without error but renders flat white/grey with none
+  // of its authored texture data. Not a loaders.js gap to register around;
+  // needs the source file re-exported to the standard metallic-roughness
+  // workflow (e.g. via gltf-transform's metalRough command) before use.
   { id: 'headquartersB', type: 'gltf', path: `${BASE}models/buildings/headquarters/numiteg.glb`, group: 'buildings', preload: false },
+  // Same KHR_materials_pbrSpecularGlossiness gap as headquartersB above --
+  // renders as an untextured grey shell.
   { id: 'storefront', type: 'gltf', path: `${BASE}models/buildings/storefront/store_front_from_night_work_in_a_shop.glb`, group: 'buildings', preload: false },
   // 166MB on disk -- flagged in the production report as needing Blender
   // optimization before any chapter can reference it; registered (the
@@ -124,9 +133,16 @@ export const MANIFEST = [
   // holds an actual semi-truck tractor cab, semi_truck/ holds an actual step
   // van. These ids point at content matching the id, not the folder.
   { id: 'deliveryVan', type: 'gltf', path: `${BASE}models/vehicles/semi_truck/delivery_truck.glb`, group: 'vehicles', preload: false },
+  // Same KHR_materials_pbrSpecularGlossiness gap as headquartersB/storefront
+  // above -- renders as an untextured grey shell.
   { id: 'pickupVanNissan', type: 'gltf', path: `${BASE}models/vehicles/pickup/nissan_caravan_detailed_3d_van_model_..glb`, group: 'vehicles', preload: false },
+  // Livery texture is real third-party branding (Pepsi) baked into the
+  // model -- fine for gallery inspection, needs a decision before any
+  // chapter actually shows it on screen.
   { id: 'pickupVanZaz', type: 'gltf', path: `${BASE}models/vehicles/pickup/zaz_tavria_pick-up.glb`, group: 'vehicles', preload: false },
   { id: 'semiTruck', type: 'gltf', path: `${BASE}models/vehicles/delivery_van/semi_truck_gameready.glb`, group: 'vehicles', preload: false },
+  // Same KHR_materials_pbrSpecularGlossiness gap as headquartersB/storefront
+  // above -- renders as an untextured grey shell.
   { id: 'cateringTruck', type: 'gltf', path: `${BASE}models/vehicles/service_truck/airport_catering_truck.glb`, group: 'vehicles', preload: false },
   { id: 'serviceFuelTruck', type: 'gltf', path: `${BASE}models/vehicles/service_truck/airport_fuel_truck.glb`, group: 'vehicles', preload: false },
   { id: 'truckTrailer', type: 'gltf', path: `${BASE}models/vehicles/trailer/truck_trailer.glb`, group: 'vehicles', preload: false },

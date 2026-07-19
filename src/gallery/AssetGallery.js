@@ -45,7 +45,12 @@ export class AssetGallery extends EventEmitter {
 
     this.camera = new PerspectiveCamera(45, 1, 0.01, 10000);
 
-    this.renderer = new WebGLRenderer({ canvas, antialias: true });
+    // preserveDrawingBuffer: true -- a single-object inspection tool has no
+    // perf reason to let the browser discard the frame after compositing;
+    // this is what makes reading the canvas back (toDataURL, drawImage as a
+    // source) reliably return the frame just rendered instead of an already-
+    // cleared buffer.
+    this.renderer = new WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.toneMapping = ACESFilmicToneMapping;
     this.renderer.shadowMap.enabled = false; // shadow camera bounds are tuned per-chapter (createLights.js); a generic auto-framed viewer spans too wide a scale range for one fixed frustum to serve every asset
