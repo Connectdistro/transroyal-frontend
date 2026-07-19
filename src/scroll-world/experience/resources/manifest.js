@@ -64,7 +64,11 @@ export const MANIFEST = [
   { id: 'airportTug', type: 'gltf', path: `${BASE}models/aircraft/tug/airport_tug.glb`, group: 'aircraft', preload: false },
 
   // Buildings (5 -- cargo_terminal x2 quarantined, see doc comment above)
-  { id: 'headquartersA', type: 'gltf', path: `${BASE}models/buildings/headquarters/4b8dbc736dc045638dafbc1a8d4b4487.glb`, group: 'buildings', preload: false },
+  // Originally pointed at 4b8dbc736dc045638dafbc1a8d4b4487.glb -- the Asset
+  // Gallery (Phase 2) surfaced that file as an 800k-triangle human character
+  // model mislabeled as a building; it has since been removed from disk and
+  // replaced with this real headquarters asset.
+  { id: 'headquartersA', type: 'gltf', path: `${BASE}models/buildings/headquarters/government_headquarters_fbx_b350821573201063a0.glb`, group: 'buildings', preload: false },
   { id: 'headquartersB', type: 'gltf', path: `${BASE}models/buildings/headquarters/numiteg.glb`, group: 'buildings', preload: false },
   { id: 'storefront', type: 'gltf', path: `${BASE}models/buildings/storefront/store_front_from_night_work_in_a_shop.glb`, group: 'buildings', preload: false },
   // 166MB on disk -- flagged in the production report as needing Blender
@@ -113,14 +117,16 @@ export const MANIFEST = [
   { id: 'woodPallets', type: 'gltf', path: `${BASE}models/logistics/pallets/wood_pallets.glb`, group: 'logistics', preload: false },
 
   // Vehicles (7)
-  // Folder says delivery_van, filename says semi_truck_gameready -- worth
-  // confirming which this actually is before referencing it from a chapter.
-  { id: 'deliveryVan', type: 'gltf', path: `${BASE}models/vehicles/delivery_van/semi_truck_gameready.glb`, group: 'vehicles', preload: false },
+  // The delivery_van/ and semi_truck/ folders' contents are swapped on disk
+  // (filenames matched the wrong folder too -- semi_truck_gameready.glb sat
+  // in delivery_van/, delivery_truck.glb sat in semi_truck/). The Asset
+  // Gallery (Phase 2) rendered both and confirmed by sight: delivery_van/
+  // holds an actual semi-truck tractor cab, semi_truck/ holds an actual step
+  // van. These ids point at content matching the id, not the folder.
+  { id: 'deliveryVan', type: 'gltf', path: `${BASE}models/vehicles/semi_truck/delivery_truck.glb`, group: 'vehicles', preload: false },
   { id: 'pickupVanNissan', type: 'gltf', path: `${BASE}models/vehicles/pickup/nissan_caravan_detailed_3d_van_model_..glb`, group: 'vehicles', preload: false },
   { id: 'pickupVanZaz', type: 'gltf', path: `${BASE}models/vehicles/pickup/zaz_tavria_pick-up.glb`, group: 'vehicles', preload: false },
-  // Folder says semi_truck, filename says delivery_truck -- same mismatch
-  // pattern as deliveryVan above, worth confirming before use.
-  { id: 'semiTruck', type: 'gltf', path: `${BASE}models/vehicles/semi_truck/delivery_truck.glb`, group: 'vehicles', preload: false },
+  { id: 'semiTruck', type: 'gltf', path: `${BASE}models/vehicles/delivery_van/semi_truck_gameready.glb`, group: 'vehicles', preload: false },
   { id: 'cateringTruck', type: 'gltf', path: `${BASE}models/vehicles/service_truck/airport_catering_truck.glb`, group: 'vehicles', preload: false },
   { id: 'serviceFuelTruck', type: 'gltf', path: `${BASE}models/vehicles/service_truck/airport_fuel_truck.glb`, group: 'vehicles', preload: false },
   { id: 'truckTrailer', type: 'gltf', path: `${BASE}models/vehicles/trailer/truck_trailer.glb`, group: 'vehicles', preload: false },

@@ -59,6 +59,12 @@ export class AssetGallery extends EventEmitter {
     // loader) -- this stub satisfies that contract without pulling in the
     // full Experience/Sizes/Time apparatus a production chapter needs.
     this.resources = new Resources({ renderer: { instance: this.renderer }, scene: null });
+    // Resources.load() never rejects (a failed asset resolves to `null`, see
+    // its own doc comment) -- the real cause only ever reaches this `error`
+    // event. Capturing it here is what lets goTo()'s failure path report
+    // *why* a load failed instead of a bare "Failed to load X".
+    this.lastLoadErrors = new Map();
+    this.resources.on('error', ({ id, error }) => this.lastLoadErrors.set(id, error));
 
     this.clock = new Clock();
     this.state = {
@@ -250,7 +256,8 @@ export class AssetGallery extends EventEmitter {
       return;
     }
     if (!gltf) {
-      this.emit('asset:error', { entry, error: new Error(`Failed to load ${entry.id}`) });
+      const cause = this.lastLoadErrors.get(entry.id) ?? new Error('reason unknown');
+      this.emit('asset:error', { entry, error: cause });
       return;
     }
 
