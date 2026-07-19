@@ -1,5 +1,6 @@
 import {
   BoxGeometry,
+  CapsuleGeometry,
   CatmullRomCurve3,
   CylinderGeometry,
   Group,
@@ -475,6 +476,26 @@ function createForklift(seed) {
   mast.position.set(0, 1.3, 1.05);
   group.add(body, seat, mast);
 
+  // Choreography Refinement Pass, Track A3 Pass 2: the operator -- this
+  // chapter's own audit finding was that almost no chapter has visible
+  // human presence; this is the one place in Ground's own yard a person
+  // is already, structurally, standing (the seat, above). Same capsule +
+  // sphere vocabulary Pickup/FinalMile's figures already use (a shorter
+  // capsule reads as seated at this abstraction level -- no separate
+  // seated-pose geometry needed), duplicated hex values per this
+  // codebase's own sibling-environment-file independence convention.
+  const operatorClothingMaterial = new MeshStandardMaterial({ color: 0x141a3a, roughness: 0.7, metalness: 0.1 });
+  const operatorSkinMaterial = new MeshStandardMaterial({ color: 0xc48a6a, roughness: 0.6, metalness: 0 });
+  varyMaterial(operatorClothingMaterial, seed + 10);
+  varyMaterial(operatorSkinMaterial, seed + 11);
+  const operatorBody = new Mesh(new CapsuleGeometry(0.22, 0.55, 4, 8), operatorClothingMaterial);
+  operatorBody.position.set(0, 1.95, -0.5);
+  operatorBody.castShadow = true;
+  const operatorHead = new Mesh(new SphereGeometry(0.14, 16, 16), operatorSkinMaterial);
+  operatorHead.position.set(0, 2.4, -0.5);
+  operatorHead.castShadow = true;
+  group.add(operatorBody, operatorHead);
+
   const forkGeometry = new BoxGeometry(0.7, 0.08, 0.15);
   const forkGroup = new Group();
   [-0.25, 0.25].forEach((x) => {
@@ -893,6 +914,21 @@ export class GroundEnvironment {
     this.serviceVehicle.position.set(DOCK_CENTER_X + 9, 0, DOCK_CENTER_Z + 4);
     this.serviceVehicle.rotation.y = Math.PI / 2;
     this.serviceVehicle.userData.baseX = this.serviceVehicle.position.x;
+
+    // Track A3 Pass 2: every other yard vehicle that actually maneuvers
+    // (both forklifts, the dock trucks via the door-motion warning light)
+    // already carries an amber practical -- the service vehicle was the
+    // one exception. Same small-radius-PointLight-plus-glow-mesh precedent,
+    // attached externally after construction (like the dock trucks' own
+    // exhaust puffs) rather than added to createTruck() itself, since only
+    // this one truck instance needs it.
+    const serviceBeacon = new Mesh(new SphereGeometry(0.1, 8, 8), new MeshBasicMaterial({ color: 0xffaa33 }));
+    serviceBeacon.position.set(0, 3.6, 0);
+    const serviceBeaconLight = new PointLight(0xffaa33, 0, 3.5, 2);
+    serviceBeaconLight.position.copy(serviceBeacon.position);
+    this.serviceVehicle.add(serviceBeacon, serviceBeaconLight);
+    this.serviceVehicle.userData.beaconLight = serviceBeaconLight;
+
     this.group.add(this.serviceVehicle);
 
     // Heaviest ground-level haze in the journey (Section 23) -- the densest
@@ -1353,6 +1389,13 @@ export class GroundEnvironment {
     // of travel -- immaterial for a plain untextured cylinder with no
     // tread to betray the mismatch, so the same helper still applies.
     rollWheels(this.serviceVehicle.userData.wheels, this.serviceVehicle.position.x - previousServiceX, TRUCK_WHEEL_RADIUS);
+
+    // Track A3 Pass 2: a distinct blink period from every other beacon in
+    // this chapter (forklifts blink on 340ms, the dock door warning on
+    // 180ms) so nothing pulses in lockstep, tied to activityWeight like
+    // every other light here.
+    const serviceBeaconBlink = Math.sin(time.elapsed / 260) > 0.55 ? 1 : 0.2;
+    this.serviceVehicle.userData.beaconLight.intensity = 1.4 * serviceBeaconBlink * this.activityWeight;
   }
 
   setActivity(state) {
