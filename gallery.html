@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="data:," />
+    <title>Asset Gallery — Dev Tool</title>
+  </head>
+  <body>
+    <!--
+      Developer-only asset inspection tool (Phase 2, Asset Integration
+      Foundation). Deliberately not wired into vite.config.js's build input,
+      so `vite build` never emits this page or its entry script into dist/ --
+      it exists only under `npm run dev`, with no route or link from the
+      production experience pointing at it.
+    -->
+    <div id="gallery-app"></div>
+    <script type="module" src="/src/gallery/main.js"></script>
+  </body>
+</html>
