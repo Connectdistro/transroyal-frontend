@@ -1,4 +1,5 @@
 import {
+  Box3,
   BoxGeometry,
   CapsuleGeometry,
   CatmullRomCurve3,
@@ -63,6 +64,75 @@ const PARCEL_REVEAL_HALF_LIFE_MS = 400;
 // second timer, the same "one signal, two dependents" idiom the Sorting
 // diverter above uses for its arm/parcel.
 const PARCEL_VISIBLE_THRESHOLD = DOOR_CLOSED_Y + (DOOR_OPEN_Y - DOOR_CLOSED_Y) * 0.6;
+
+// Asset Integration Phase, Pickup Chapter Commit 1: the real deliveryVan
+// GLB (manifest id `deliveryVan` -- the same asset Ground's dock trucks
+// already use; a courier van being the same vehicle type as the dock
+// truck reads as fleet consistency, not a duplicate, and the other two
+// "pickup"-folder-named assets are unusable as-is: pickupVanNissan renders
+// untextured (a KHR_materials_pbrSpecularGlossiness gap this three.js
+// version doesn't support, see manifest.js's own comment) and pickupVanZaz
+// carries a baked-in third-party Pepsi livery) replaces the vehicle's
+// cargo/cab/windshield/wheels once it loads. Orientation, pivot, and scale
+// were characterized once already for the Ground integration (nose at raw
+// -Z, origin well off the true geometric center on every axis) --
+// applyVehicleModel() reuses that same three-nested-group recenter/flip/
+// scale technique verbatim.
+//
+// The door/interior/parcel are deliberately NOT hidden -- they're this
+// chapter's actual decision moment ("the driver accepts the shipment and
+// closes the cargo door," see this file's own Track A1 comment), and the
+// source file has no separate door node to preserve it with (confirmed
+// via the Asset Gallery's node inspector during the Ground integration --
+// one fused mesh). They stay as procedural attachments layered on the
+// real hull, same idiom as Ground's lights and Air's gear/flaps.
+const VEHICLE_MODEL_ROTATION_Y = Math.PI;
+// Matches the procedural vehicle's own existing footprint -- headlights at
+// z=5.42 to the interior/door plane at z=-3.4, roughly 8.8 units end to
+// end -- not a guessed round number.
+const VEHICLE_TARGET_LENGTH = 8.8;
+
+/** Asset Integration Phase, Pickup Chapter Commit 1: swaps the procedural
+ *  vehicle's cargo/cab/windshield/wheels for the real deliveryVan GLB.
+ *  Identical technique to Ground's applyTruckModel() (recenter X/Z on the
+ *  bbox center, anchor Y to the bbox minimum so the wheels sit on the
+ *  ground plane rather than centered/floating, flip 180deg since the
+ *  source model's nose is authored at -Z and this chapter's own vehicle
+ *  convention is +Z, then scale) -- not extracted into a shared helper
+ *  between the two chapter files, matching this codebase's own established
+ *  convention of sibling environment files staying independent rather than
+ *  cross-importing (see e.g. CARGO_POD_COLOR's duplicated-not-imported hex
+ *  in AirEnvironment.js). */
+function applyVehicleModel(vehicleGroup, scene) {
+  const box = new Box3().setFromObject(scene);
+  const center = box.getCenter(new Vector3());
+
+  scene.position.x -= center.x;
+  scene.position.z -= center.z;
+  scene.position.y -= box.min.y;
+
+  const recenter = new Group();
+  recenter.add(scene);
+
+  const flip = new Group();
+  flip.rotation.y = VEHICLE_MODEL_ROTATION_Y;
+  flip.add(recenter);
+
+  const size = box.getSize(new Vector3());
+  const scale = VEHICLE_TARGET_LENGTH / size.z;
+  const container = new Group();
+  container.scale.setScalar(scale);
+  container.add(flip);
+
+  scene.traverse((child) => {
+    if (child.isMesh) child.castShadow = true;
+  });
+
+  vehicleGroup.userData.hullMeshes.forEach((mesh) => {
+    mesh.visible = false;
+  });
+  vehicleGroup.add(container);
+}
 
 function createDockFloor() {
   const geometry = new BoxGeometry(34, 0.4, 30);
@@ -166,6 +236,7 @@ function createVehicle() {
   group.add(windshield);
 
   const wheelGeometry = new CylinderGeometry(0.55, 0.55, 0.4, 16);
+  const wheels = [];
   [
     [-1.75, 0.55, 2.4],
     [1.75, 0.55, 2.4],
@@ -177,6 +248,7 @@ function createVehicle() {
     wheel.position.set(x, y, z);
     wheel.castShadow = true;
     group.add(wheel);
+    wheels.push(wheel);
   });
 
   [-1.55, 1.55].forEach((x) => {
@@ -222,6 +294,12 @@ function createVehicle() {
 
   group.userData.door = door;
   group.userData.parcel = parcel;
+  // Asset Integration Phase, Pickup Chapter Commit 1: the raw hull +
+  // wheel primitives only -- everything the real deliveryVan GLB's own
+  // fused mesh already depicts once applyVehicleModel() attaches it.
+  // door/interior/parcel/tailLights/headLights are deliberately NOT in
+  // this list -- see applyVehicleModel()'s own doc comment for why.
+  group.userData.hullMeshes = [cargo, cab, windshield, ...wheels];
 
   group.position.set(9, 0, REGION_Z + 6);
   group.userData.baseY = group.position.y;
@@ -347,6 +425,19 @@ export class PickupEnvironment {
     this.group = new Group();
     this.vehicle = createVehicle();
     this.group.add(createDockFloor(), createDockWall(), createGroundDetail(), this.vehicle, createDriver());
+
+    // Asset Integration Phase, Pickup Chapter Commit 1: the procedural
+    // hull built above renders immediately (no blank vehicle while this
+    // loads); once the real deliveryVan GLB is ready, applyVehicleModel()
+    // hides the hull/wheel primitives and attaches the real mesh in their
+    // place. Ground's dock trucks already trigger this same manifest
+    // entry's first load -- resources.load() caches after, so this is
+    // instant if that chapter loaded first.
+    this.experience.resources.load('deliveryVan').then(() => {
+      const clone = this.experience.resources.clone('deliveryVan');
+      if (!clone) return;
+      applyVehicleModel(this.vehicle, clone.scene);
+    });
 
     const { group: scanGroup, light: scanLight } = createScanPractical();
     this.group.add(scanGroup, scanLight);
