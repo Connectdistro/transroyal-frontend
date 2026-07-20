@@ -95,6 +95,19 @@ const PHASE_DEPART_END = 22000;
 
 const DOCK_TRUCK_WAYPOINT_Z = DOCK_CENTER_Z + 14; // the existing dock spot
 const QUEUE_WAYPOINT_Z = DOCK_CENTER_Z + 30; // the existing queue spot
+
+// Ground & Sorting Choreography Fixes, Fix 1: the dock/queued rigs
+// previously shared one X lane (DOCK_CENTER_X - 3), which put them ~1.9
+// units apart -- well inside a single truck's own 10.25-unit length -- at
+// every role-swap moment, since both trucks' Z targets converge near
+// SPAWN_WAYPOINT_Z during the 'gap' phase (see updateDockCycle()). Two
+// distinct lanes, eased toward per the truck's CURRENT role (not a fixed
+// physical rig -- the two rigs alternate labels every cycle), keeps them
+// laterally separated even when Z coincides. DOCK_LANE_X matches every
+// existing dock-face fixture (door/ramp/bumpers, all authored against the
+// same DOCK_CENTER_X - 3) so the docked truck still lines up with them.
+const DOCK_LANE_X = DOCK_CENTER_X - 3;
+const QUEUE_LANE_X = DOCK_LANE_X - 4;
 // Ground Chapter Cinematic Realism Pass, Commit 5 (composition review): a
 // live-camera snapshot caught a transiting truck looming uncomfortably
 // large -- the original +55 offset put SPAWN only 30 units from the
@@ -105,6 +118,19 @@ const DOOR_CLOSED_Y = 2.5;
 const DOOR_OPEN_Y = 2.5 + 4.6;
 const DOCK_MOTION_HALF_LIFE_MS = 900;
 const PALLET_REVEAL_HALF_LIFE_MS = 350;
+
+// Ground & Sorting Choreography Fixes, Fix 3: a real depot truck backs out
+// of a dock it arrived nose-in to, THEN turns to drive away normally -- not
+// a blanket orientation flip the instant it starts moving. A departing
+// truck (targetZ === SPAWN_WAYPOINT_Z) keeps its arrival heading (nose at
+// -Z, rotation.y = Math.PI) until it's DEPART_REVERSE_DISTANCE clear of its
+// own dock spot, then eases its heading to 0 (nose at +Z, facing its actual
+// direction of travel) over a believable multi-second turn rather than a
+// snap. Any truck that isn't currently departing (arrive/queue/dock/the
+// other rig looping back through the queue) always targets Math.PI --
+// same convention this file already used unconditionally before this fix.
+const DEPART_REVERSE_DISTANCE = 8;
+const DEPART_TURN_HALF_LIFE_MS = 2200;
 
 // Choreography Refinement Pass, Commit 1: a slow, irregular amplitude
 // modulation on the existing cable/pennant sway (still the same base sines
@@ -141,9 +167,22 @@ const PALLET_SETTLE_AMPLITUDE = 0.08;
 
 // Forklift trip waypoints/periods -- module-scope constants (not built
 // inside update(), which would allocate every frame). Staggered periods
-// (2600ms / 3100ms) mean the two forklifts are never in lockstep.
-const FORKLIFT_DROP = { x: DOCK_CENTER_X + 2, z: DOCK_CENTER_Z - 3 };
-const FORKLIFT_PICKUP = { x: DOCK_CENTER_X - 3, z: DOCK_TRUCK_WAYPOINT_Z - 3 };
+// (2600ms / 3100ms) mean the two forklifts are never in lockstep -- but
+// both previously shared the exact same DROP/PICKUP waypoints, so their
+// eased positions still converged to ~0.027 units apart once per unload
+// window regardless of the stagger. Indexed per forklift now: index 1's
+// spots are offset to the pallet stack's own second column (see
+// createDockYard()'s palletGrid, offsetX: 1.1) and an adjacent truck-side
+// position, reading as two forklifts working adjacent bays rather than
+// timing two identical trips apart.
+const FORKLIFT_DROP = [
+  { x: DOCK_CENTER_X + 2, z: DOCK_CENTER_Z - 3 },
+  { x: DOCK_CENTER_X + 3.1, z: DOCK_CENTER_Z - 3 },
+];
+const FORKLIFT_PICKUP = [
+  { x: DOCK_CENTER_X - 3, z: DOCK_TRUCK_WAYPOINT_Z - 3 },
+  { x: DOCK_CENTER_X - 1.6, z: DOCK_TRUCK_WAYPOINT_Z - 3 },
+];
 const FORKLIFT_IDLE = [
   { x: DOCK_CENTER_X + 1, z: DOCK_CENTER_Z + 2 },
   { x: DOCK_CENTER_X + 4, z: DOCK_CENTER_Z + 6 },
@@ -384,11 +423,13 @@ function createDockYard() {
   const group = new Group();
 
   const dockTruck = createTruck(0xd8dce2, 40, { livery: true });
-  dockTruck.position.set(DOCK_CENTER_X - 3, 0, DOCK_CENTER_Z + 14);
+  dockTruck.position.set(DOCK_LANE_X, 0, DOCK_CENTER_Z + 14);
   dockTruck.rotation.y = Math.PI;
+  dockTruck.userData.headingY = Math.PI;
   const queuedTruck = createTruck(0xc8ccd4, 41, { livery: true });
-  queuedTruck.position.set(DOCK_CENTER_X - 3, 0, DOCK_CENTER_Z + 30);
+  queuedTruck.position.set(QUEUE_LANE_X, 0, DOCK_CENTER_Z + 30);
   queuedTruck.rotation.y = Math.PI;
+  queuedTruck.userData.headingY = Math.PI;
   group.add(dockTruck, queuedTruck);
 
   // Logistics Choreography Phase, Commit 4: a small exhaust puff parented
@@ -832,7 +873,7 @@ function createFleet() {
 function createRouteLine() {
   // Continues from Sorting's own end point through Ground's region.
   const curve = new CatmullRomCurve3([
-    new Vector3(0, 0.65, -195),
+    new Vector3(0, 0.65, -180),
     new Vector3(2, 0.4, -240),
     new Vector3(4, 0.1, -285),
     new Vector3(6, 0.05, REGION_Z),
@@ -1303,6 +1344,23 @@ export class GroundEnvironment {
     this.dockTruck.position.z += dockTruckDeltaZ * motionT;
     this.queuedTruck.position.z += queuedTruckDeltaZ * motionT;
 
+    // Fix 1: lane discipline -- ease each rig's X toward whichever lane its
+    // CURRENT role implies (this.dockTruck/this.queuedTruck already reflect
+    // the post-swap labels above), same motionT already driving Z.
+    this.dockTruck.position.x += (DOCK_LANE_X - this.dockTruck.position.x) * motionT;
+    this.queuedTruck.position.x += (QUEUE_LANE_X - this.queuedTruck.position.x) * motionT;
+
+    // Fix 3: departure heading turn -- computed per truck from its own
+    // targetZ/position, so it applies correctly to whichever physical rig
+    // currently holds either role.
+    const turnT = dampFactor(DEPART_TURN_HALF_LIFE_MS, time.delta);
+    [this.dockTruck, this.queuedTruck].forEach((truck) => {
+      const isDeparting = truck.userData.targetZ === SPAWN_WAYPOINT_Z;
+      const clearOfDock = truck.position.z >= DOCK_TRUCK_WAYPOINT_Z + DEPART_REVERSE_DISTANCE;
+      truck.userData.headingY = isDeparting && clearOfDock ? 0 : Math.PI;
+      truck.rotation.y += (truck.userData.headingY - truck.rotation.y) * turnT;
+    });
+
     // Logistics Choreography Phase, Commit 4: exhaust brightens briefly
     // during arrive/depart (accelerating away from a stop), reusing the
     // phase transitions already tracked above rather than a new signal.
@@ -1432,16 +1490,16 @@ export class GroundEnvironment {
         const period = FORKLIFT_TRIP_PERIOD_MS[i];
         const tripPhase = ((unloadElapsed + i * 900) % period) / period;
         atDrop = tripPhase < 0.5;
-        targetX = atDrop ? FORKLIFT_DROP.x : FORKLIFT_PICKUP.x;
-        targetZ = atDrop ? FORKLIFT_DROP.z : FORKLIFT_PICKUP.z;
+        targetX = atDrop ? FORKLIFT_DROP[i].x : FORKLIFT_PICKUP[i].x;
+        targetZ = atDrop ? FORKLIFT_DROP[i].z : FORKLIFT_PICKUP[i].z;
       } else if (inLoadoutWindow) {
         // One-shot, not a repeating trip like the unload loop above: first
         // leg fetches the pallet from the stack (FORKLIFT_DROP), second leg
         // carries it to the truck (FORKLIFT_PICKUP) -- see this file's own
         // LOADOUT_* constants for the full rationale.
         loadoutCarrying = cycleT >= LOADOUT_MIDPOINT;
-        targetX = loadoutCarrying ? FORKLIFT_PICKUP.x : FORKLIFT_DROP.x;
-        targetZ = loadoutCarrying ? FORKLIFT_PICKUP.z : FORKLIFT_DROP.z;
+        targetX = loadoutCarrying ? FORKLIFT_PICKUP[i].x : FORKLIFT_DROP[i].x;
+        targetZ = loadoutCarrying ? FORKLIFT_PICKUP[i].z : FORKLIFT_DROP[i].z;
       }
       const dz = targetZ - forklift.position.z;
       const dx = targetX - forklift.position.x;

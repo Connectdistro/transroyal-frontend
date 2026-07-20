@@ -244,7 +244,7 @@ function createRouteLine() {
   // Sorting's region -- Section 23: the parcel rejoins the flow of the
   // conveyor line on arrival.
   const curve = new CatmullRomCurve3([
-    new Vector3(4.5, 0.05, -105),
+    new Vector3(4.5, 0.05, -84.5),
     new Vector3(2, 0.05, -130),
     new Vector3(0, 0.05, -155),
     new Vector3(0, 0.65, REGION_Z),
