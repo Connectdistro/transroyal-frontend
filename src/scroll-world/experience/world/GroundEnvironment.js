@@ -1,4 +1,5 @@
 import {
+  Box3,
   BoxGeometry,
   CapsuleGeometry,
   CatmullRomCurve3,
@@ -169,6 +170,21 @@ const LOADOUT_MIDPOINT = LOADOUT_WINDOW_START + (LOADOUT_WINDOW_END - LOADOUT_WI
 // single decision beat reads better than two forklifts converging on the
 // same truck at once.
 const LOADOUT_FORKLIFT_INDEX = 0;
+
+// Asset Integration Phase, Ground Chapter Commit 1: the real deliveryVan
+// GLB (manifest id `deliveryVan`) replaces the dock/queued trucks'
+// procedural hull once it loads. Confirmed live in the Asset Gallery: the
+// model's nose points toward local -Z and its own bbox center sits well
+// off its local origin on every axis -- the opposite of createTruck()'s
+// own convention (nose at +Z) and, unlike the aircraft, a ground vehicle
+// that also needs its wheel-contact plane kept at y=0 rather than
+// vertically centered (see applyTruckModel()'s own Y handling). Scale
+// matches the real model's raw length (591 units, confirmed via a full
+// vertex-bounds check) to the procedural rig's own overall footprint --
+// tail lights at z=-4.1 to headlights at z=6.15, roughly 10.25 units end
+// to end -- rather than guessing a round number.
+const TRUCK_MODEL_ROTATION_Y = Math.PI;
+const TRUCK_TARGET_LENGTH = 10.25;
 
 /** Logistics Choreography Phase, Commit 1: rolls a vehicle's wheel meshes
  *  by the arc-length equivalent of how far it actually moved this frame --
@@ -683,7 +699,70 @@ function createTruck(color, seed = 0) {
   });
   group.userData.indicators = indicators; // [left, right]
 
+  // Asset Integration Phase, Ground Chapter Commit 1: the raw hull +
+  // wheel primitives only -- everything the real deliveryVan GLB's own
+  // single fused mesh already depicts once applyTruckModel() attaches it
+  // (body, cab, AND its own baked-in wheels -- unlike the aircraft's GLB,
+  // this one has no separate wheel nodes to leave animating independently,
+  // so the procedural wheels have to go too rather than double up with the
+  // real model's own). tailLights/headlights/indicators are NOT in this
+  // list -- they stay visible as small practical-light attachments, the
+  // same idiom Air's nav lights/beacon used, since the static GLB has no
+  // emissive rig of its own for any of them.
+  group.userData.hullMeshes = [cargo, cab, ...wheels];
+
   return group;
+}
+
+/** Asset Integration Phase, Ground Chapter Commit 1: swaps a truck rig's
+ *  procedural hull for the real deliveryVan GLB once it loads, called
+ *  selectively on just the two dock-yard rigs (the chapter's actual hero --
+ *  see this file's own Commit 1 comment on DOCK_CENTER_X/Z) -- the highway
+ *  fleet and service vehicle stay procedural for now. Same three-nested-
+ *  group technique as Air's applyCargoPlaneModel() (recenter, flip, scale),
+ *  with one difference specific to a GROUND vehicle: X/Z recenter on the
+ *  bbox center same as the aircraft, but Y anchors the bbox's own MINIMUM
+ *  to 0 rather than centering it, so the model's wheels sit on the ground
+ *  plane instead of the hull floating half-buried/half-airborne. A Y-axis
+ *  rotation never touches Y values, so doing this before the 180deg flip
+ *  below keeps the ground plane correct after it too.
+ *
+ *  No separate wheel nodes exist in the source file (confirmed via the
+ *  Asset Gallery's node inspector -- one fused mesh, body and wheels
+ *  together), so wheel-roll and steer-axle yaw are lost for these two rigs
+ *  specifically -- accepted rather than showing two visibly conflicting
+ *  wheel sets. Body-level steering lean (truck.rotation.z) still applies
+ *  to the whole group including the real hull, so the "correcting toward
+ *  its target" read survives; only the wheels' own spin doesn't. */
+function applyTruckModel(truckGroup, scene) {
+  const box = new Box3().setFromObject(scene);
+  const center = box.getCenter(new Vector3());
+
+  scene.position.x -= center.x;
+  scene.position.z -= center.z;
+  scene.position.y -= box.min.y;
+
+  const recenter = new Group();
+  recenter.add(scene);
+
+  const flip = new Group();
+  flip.rotation.y = TRUCK_MODEL_ROTATION_Y;
+  flip.add(recenter);
+
+  const size = box.getSize(new Vector3());
+  const scale = TRUCK_TARGET_LENGTH / size.z;
+  const container = new Group();
+  container.scale.setScalar(scale);
+  container.add(flip);
+
+  scene.traverse((child) => {
+    if (child.isMesh) child.castShadow = true;
+  });
+
+  truckGroup.userData.hullMeshes.forEach((mesh) => {
+    mesh.visible = false;
+  });
+  truckGroup.add(container);
 }
 
 /** A fleet in constant, layered motion (Section 23: "the busiest midground
@@ -888,6 +967,22 @@ export class GroundEnvironment {
     this.queuedTruck = dockYard.queuedTruck;
     this.palletPool = dockYard.palletPool;
     this.group.add(dockYard.group);
+
+    // Asset Integration Phase, Ground Chapter Commit 1: both dock-yard rigs
+    // get the real hull -- they alternate the dockTruck/queuedTruck LABEL
+    // every cycle (see updateDockCycle()'s own "recycled from a small
+    // pool" comment), so swapping only one of the two objects would mean
+    // the visual identity flips procedural/real every time the labels
+    // swap. One load, two independent clones (a raw get() would share one
+    // Object3D between both rigs). The procedural rig renders immediately
+    // in the meantime -- no blank truck while this loads.
+    this.experience.resources.load('deliveryVan').then(() => {
+      [this.dockTruck, this.queuedTruck].forEach((truck) => {
+        const clone = this.experience.resources.clone('deliveryVan');
+        if (!clone) return;
+        applyTruckModel(truck, clone.scene);
+      });
+    });
 
     this.forklifts = [createForklift(50), createForklift(51)];
     this.forklifts[0].position.set(DOCK_CENTER_X + 1, 0, DOCK_CENTER_Z + 2);
