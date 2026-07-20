@@ -24,8 +24,9 @@ const CLOUD_COLOR = 0xeef2ff;
 // Air's own accent from config.js.
 const ELECTRIC_400 = 0x4fa3ff;
 const ROYAL_600 = 0x2540b0;
-// Fuselage reads light/reflective -- distinct from every ground vehicle's
-// dark navy palette, so it can visibly "catch" the key light (Commit 4).
+// Fuselage reads light/reflective -- distinctly lighter than every ground
+// vehicle's own industrial-neutral palette, so it can visibly "catch" the
+// key light (Commit 4).
 const FUSELAGE_COLOR = 0xd4dbe8;
 const ENGINE_COLOR = 0x14181f;
 // Matches GroundEnvironment.js's CONTAINER_COLORS[0] exactly -- a

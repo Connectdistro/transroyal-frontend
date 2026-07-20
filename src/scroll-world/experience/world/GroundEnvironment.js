@@ -186,6 +186,23 @@ const LOADOUT_FORKLIFT_INDEX = 0;
 const TRUCK_MODEL_ROTATION_Y = Math.PI;
 const TRUCK_TARGET_LENGTH = 10.25;
 
+// Blue Brand Accent Phase, Commit 1: the project's own Brand material
+// category (docs/MATERIAL_LANGUAGE_GUIDE.md) was defined but unused until
+// now -- "a logo treatment... free to blend warm and blue because it's
+// expressing the brand" is exactly a livery stripe. Reuses ELECTRIC_500,
+// this codebase's single canonical blue (identical value in tokens.css's
+// --accent and every chapter's own route line), not a new hex -- this is
+// the same blue as every Digital material, just applied to a new kind of
+// object. Sized as ratios of the real hull's own computed dimensions
+// (applyTruckModel() already derives these every call) rather than fixed
+// numbers, so it stays proportionally correct regardless of which vehicle
+// model or target length is in play.
+const LIVERY_STRIPE_LENGTH_RATIO = 0.75;
+const LIVERY_STRIPE_HEIGHT_RATIO = 0.08;
+const LIVERY_STRIPE_Y_RATIO = 0.42;
+const LIVERY_STRIPE_THICKNESS = 0.03;
+const LIVERY_STRIPE_INSET = 0.015;
+
 /** Logistics Choreography Phase, Commit 1: rolls a vehicle's wheel meshes
  *  by the arc-length equivalent of how far it actually moved this frame --
  *  reuses each vehicle's own already-computed per-frame position delta
@@ -763,6 +780,27 @@ function applyTruckModel(truckGroup, scene) {
     mesh.visible = false;
   });
   truckGroup.add(container);
+
+  // Blue Brand Accent Phase, Commit 1: see LIVERY_STRIPE_* constants' own
+  // doc comment. Added directly to truckGroup, a sibling of `container`
+  // rather than a child of it -- `container` carries the hull's own scale,
+  // and these ratios are already expressed in truckGroup's real (post-
+  // scale) units, so nesting inside container would scale them a second
+  // time.
+  const halfWidth = (size.x * scale) / 2;
+  const halfHeight = (size.y * scale) / 2;
+  const halfLength = (size.z * scale) / 2;
+  const stripeMaterial = new MeshBasicMaterial({ color: ELECTRIC_500 });
+  const stripeGeometry = new BoxGeometry(
+    LIVERY_STRIPE_THICKNESS,
+    halfHeight * 2 * LIVERY_STRIPE_HEIGHT_RATIO,
+    halfLength * 2 * LIVERY_STRIPE_LENGTH_RATIO
+  );
+  [-1, 1].forEach((side) => {
+    const stripe = new Mesh(stripeGeometry, stripeMaterial);
+    stripe.position.set(side * (halfWidth - LIVERY_STRIPE_INSET), halfHeight * 2 * LIVERY_STRIPE_Y_RATIO, 0);
+    truckGroup.add(stripe);
+  });
 }
 
 /** A fleet in constant, layered motion (Section 23: "the busiest midground

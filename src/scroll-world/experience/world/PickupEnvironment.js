@@ -30,7 +30,9 @@ const ELECTRIC_400 = 0x4fa3ff;
 const ROYAL_600 = 0x2540b0;
 const OFFWHITE_100 = 0xeef2ff;
 // The Lighting Bible's one standing exception (Section 12 / Addendum 32.5):
-// natural skin tone, never tinted by the world's cool grade.
+// natural skin tone, never tinted by the world's own lighting grade (warm
+// gold/umber since the palette migration -- this exception predates and
+// survives that change unchanged either way).
 const SKIN_TONE = 0xc48a6a;
 
 // Pickup's own region of the single continuous scene graph (Section 9),
@@ -92,6 +94,18 @@ const VEHICLE_MODEL_ROTATION_Y = Math.PI;
 // end -- not a guessed round number.
 const VEHICLE_TARGET_LENGTH = 8.8;
 
+// Blue Brand Accent Phase, Commit 1: same rationale as Ground's own
+// LIVERY_STRIPE_* constants (GroundEnvironment.js) -- the project's Brand
+// material category was defined but unused until now; reuses ELECTRIC_500,
+// this codebase's single canonical blue, not a new hex. Duplicated rather
+// than imported, matching this codebase's own convention of sibling
+// environment files staying independent.
+const LIVERY_STRIPE_LENGTH_RATIO = 0.75;
+const LIVERY_STRIPE_HEIGHT_RATIO = 0.08;
+const LIVERY_STRIPE_Y_RATIO = 0.42;
+const LIVERY_STRIPE_THICKNESS = 0.03;
+const LIVERY_STRIPE_INSET = 0.015;
+
 /** Asset Integration Phase, Pickup Chapter Commit 1: swaps the procedural
  *  vehicle's cargo/cab/windshield/wheels for the real deliveryVan GLB.
  *  Identical technique to Ground's applyTruckModel() (recenter X/Z on the
@@ -132,6 +146,26 @@ function applyVehicleModel(vehicleGroup, scene) {
     mesh.visible = false;
   });
   vehicleGroup.add(container);
+
+  // Blue Brand Accent Phase, Commit 1: see LIVERY_STRIPE_* constants' own
+  // doc comment. Added directly to vehicleGroup, a sibling of `container`
+  // rather than a child of it -- these ratios are already expressed in
+  // vehicleGroup's real (post-scale) units, so nesting inside container
+  // would scale them a second time.
+  const halfWidth = (size.x * scale) / 2;
+  const halfHeight = (size.y * scale) / 2;
+  const halfLength = (size.z * scale) / 2;
+  const stripeMaterial = new MeshBasicMaterial({ color: ELECTRIC_500 });
+  const stripeGeometry = new BoxGeometry(
+    LIVERY_STRIPE_THICKNESS,
+    halfHeight * 2 * LIVERY_STRIPE_HEIGHT_RATIO,
+    halfLength * 2 * LIVERY_STRIPE_LENGTH_RATIO
+  );
+  [-1, 1].forEach((side) => {
+    const stripe = new Mesh(stripeGeometry, stripeMaterial);
+    stripe.position.set(side * (halfWidth - LIVERY_STRIPE_INSET), halfHeight * 2 * LIVERY_STRIPE_Y_RATIO, 0);
+    vehicleGroup.add(stripe);
+  });
 }
 
 function createDockFloor() {

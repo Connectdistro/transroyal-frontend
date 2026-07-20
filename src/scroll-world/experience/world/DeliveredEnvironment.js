@@ -13,7 +13,7 @@ const PORCH_LIGHT_COLOR = 0xeef2ff;
 // value something else overrides at construction. Matches shots.js's
 // LIGHT_TINTS.delivered -- rose-gold, closing the loop Origin opened.
 const WARM_GOLD_ROSE = 0xffb380;
-const WARM_UMBER_600 = 0x3d2f28;
+const WARM_UMBER_600 = 0x3d2f24;
 
 // Past Final Mile's furthest house (which sits around z = -740).
 const REGION_Z = -800;

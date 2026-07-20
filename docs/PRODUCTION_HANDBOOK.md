@@ -305,21 +305,36 @@ A single WebGL renderer and a single camera rig serve the entire experience. The
 
 # 10. RENDERING PIPELINE
 
+**Status note (Asset Integration / Blue Brand Accent phase):** this section
+was written before the warm-palette migration (`29a1a3b1`) and the Material
+Language Guide's Physical/Digital/Brand doctrine
+(`docs/MATERIAL_LANGUAGE_GUIDE.md`), and describes a post-processing stack
+that has never been implemented in code — there is no `EffectComposer`, bloom,
+depth of field, or color-grade pass anywhere in the renderer today
+(`src/scroll-world/experience/Renderer.js` is a plain `WebGLRenderer`). The
+"cool navy/electric-blue grade" and "royal blue" fog described below are
+also stale — the actual, committed lighting doctrine is warm gold/umber
+throughout (`createLights.js`, `shots.js`'s `LIGHT_TINTS`), with blue reserved
+for Digital (route lines, tracking, scan beams) and Brand (identity accents)
+materials only, never the environment itself. Treat everything below as an
+aspirational target for a future post-processing pass, not a description of
+the current renderer.
+
 Lighting is physically based throughout. Every material is authored with PBR (physically based rendering) properties — albedo, roughness, metalness, normal, and, where needed, emissive maps — so surfaces respond correctly to the two-source lighting model in every environment.
 
-Environments are lit primarily by HDRI image-based lighting, tuned per world region to the cool navy/electric-blue grade, supplemented by the two direct sources defined in the Lighting Bible.
+Environments are lit primarily by the two direct sources defined in the Lighting Bible (warm gold key, warm umber fill — see `createLights.js`), supplemented by a generated image-based reflection source; there is no photographic HDRI in the pipeline today.
 
 Tone mapping is filmic, tuned to preserve crushed blacks and to prevent accent highlights from clipping to flat white — a light source in this world glows, it does not blow out.
 
-The post-processing stack is applied globally, consistently, across every region of the world:
+If a post-processing stack is built in the future, it should stay consistent with the warm/Digital-blue doctrine above rather than the pre-migration cool grade this section originally specified:
 
 Bloom, tuned narrow and restrained — enough for practicals and accent light trails to feel luminous, never enough to haze the whole frame.
 
 Depth of field, always favoring the camera's current focal subject, softening everything behind and, subtly, everything in front.
 
-Atmospheric fog, volumetric where the environment calls for it, always tinted royal blue.
+Atmospheric fog stays tied to each chapter's own warm light tint (as it is today, via `scene.fog`) — never uniformly tinted blue; a Digital-only cool glow near route lines/beacons is the more doctrine-consistent way to add blue depth cueing if wanted.
 
-Color grading, a fixed cool LUT applied uniformly, with the one standing exception that protects natural skin tone.
+Color grading, if added, should reinforce the warm Physical / blue Digital-Brand split rather than a single fixed cool LUT — with the one standing exception that protects natural skin tone.
 
 Vignette, faint, framing rather than darkening the corners.
 

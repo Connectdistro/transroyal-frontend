@@ -38,7 +38,7 @@ export const LIGHT_TINTS = {
   ground: { key: 0xff9642, fill: 0x4a3624 }, // golden afternoon -- deeper gold-orange
   air: { key: 0xffd9ab, fill: 0x453c30 }, // high-altitude haze -- pale warm gold, not blue
   'final-mile': { key: 0xff8c42, fill: 0x40301f }, // late-afternoon warmth -- deep orange, low sun
-  delivered: { key: 0xffb380, fill: 0x3d2f28 }, // warm sunset, echoes origin -- rose-gold
+  delivered: { key: 0xffb380, fill: 0x3d2f24 }, // warm sunset, echoes origin -- rose-gold
 };
 
 export const SHOTS = {

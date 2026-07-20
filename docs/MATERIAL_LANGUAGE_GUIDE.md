@@ -2,6 +2,18 @@
 
 Planning document, not a code change. Every material referenced below already exists in the codebase — this classifies what's there today and defines the rule for anything added later. Produced after the warm palette migration surfaced the real question: which materials should respond to the new warm lighting, and which should stay blue on purpose.
 
+**Status note (Blue Brand Accent phase):** the "Physical — body paint" and
+"Ground/surface" rows below, and the "What this doesn't decide" section at
+the end, describe those materials as still navy and their recolor as a
+future pass. That recolor has since shipped (`feat(materials): recolor
+Physical materials from navy to industrial neutrals`) — vehicle
+body/structure/ground colors across all 7 chapters are industrial
+neutrals today (grays/off-whites), not navy. Some Physical-category items
+were explicitly left out of that pass and remain navy on purpose: parcel/
+cargo-box materials and a couple of figures' clothing — see each chapter
+file's own material constants for current values rather than trusting the
+table below for those two rows.
+
 ## The doctrine
 
 Every material in this world is **Physical**, **Digital**, or **Brand**. Every material should belong to exactly one.
@@ -35,7 +47,7 @@ Confirmed during the warm palette migration: `MeshBasicMaterial` ignores scene l
 | **Digital — signage/wayfinding** | Ground's yard chevrons/panel edges, Pickup's bay panel, Sorting's lane-marker panels (`ELECTRIC_400`/`ROYAL_500` edges, `OFFWHITE_100` panels) | No, by design | Stays blue-edged — abstract wayfinding, reads as information display, not a physical sign material |
 | **Parcel labels** | `PARCEL_LABEL_COLOR`/`HANDOFF_PARCEL_LABEL_COLOR` (`0xeef2ff`, off-white, unlit) | No | Stays neutral/off-white — a shipping label is printed data on the parcel, arguably belongs in the Digital column even though the parcel box itself is Physical |
 | **Resolved — vehicle lighting** | Taillights used `ELECTRIC_400` (blue); headlights use `OFFWHITE_100` (already realistic); turn signals use `0xffaa33` (already realistic amber) | Physical, real-world convention wins | **Decided**: taillights move to red (`0xff3b30`, matching Air's own anti-collision beacon red rather than inventing a new hex). Physical vehicle functions use their legally-recognizable real colors; the TransRoyal brand doesn't claim vehicle lighting. If a Brand moment wants blue near a vehicle later, it belongs on equipment that isn't a legally-recognizable light (a tracking LED, a scanner strip), not on the light itself. |
-| **Brand** | Nothing yet | — | Reserved for future work — logo illumination, chapter-transition flourishes, signature architectural accents, marketing moments. Don't force an existing Physical or Digital material into this category just because it's visually striking; it has to actually be doing brand-identity work rather than simulating a real object or visualizing data. |
+| **Brand** | Livery stripe on Ground's dock/queued trucks and Pickup's courier van (both real deliveryVan GLB hulls) — a thin unlit `ELECTRIC_500` band along the body, added purely to say "this is TransRoyal," not to simulate a physical light or paint detail | — | This is the pattern going forward: a Brand accent reuses the project's existing canonical blue (`ELECTRIC_500`/`0x2f8bff`, same value as every Digital material and `tokens.css`'s `--accent`) rather than a new hex, stays `MeshBasicMaterial` (unlit, reads pure blue regardless of scene lighting), and earns its own classification only when it's genuinely not simulating a real object or visualizing data. Don't force an existing Physical or Digital material into this category just because it's visually striking. |
 
 ## What this doesn't decide
 
