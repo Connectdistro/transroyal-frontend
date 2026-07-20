@@ -186,23 +186,6 @@ const LOADOUT_FORKLIFT_INDEX = 0;
 const TRUCK_MODEL_ROTATION_Y = Math.PI;
 const TRUCK_TARGET_LENGTH = 10.25;
 
-// Blue Brand Accent Phase, Commit 1: the project's own Brand material
-// category (docs/MATERIAL_LANGUAGE_GUIDE.md) was defined but unused until
-// now -- "a logo treatment... free to blend warm and blue because it's
-// expressing the brand" is exactly a livery stripe. Reuses ELECTRIC_500,
-// this codebase's single canonical blue (identical value in tokens.css's
-// --accent and every chapter's own route line), not a new hex -- this is
-// the same blue as every Digital material, just applied to a new kind of
-// object. Sized as ratios of the real hull's own computed dimensions
-// (applyTruckModel() already derives these every call) rather than fixed
-// numbers, so it stays proportionally correct regardless of which vehicle
-// model or target length is in play.
-const LIVERY_STRIPE_LENGTH_RATIO = 0.75;
-const LIVERY_STRIPE_HEIGHT_RATIO = 0.08;
-const LIVERY_STRIPE_Y_RATIO = 0.42;
-const LIVERY_STRIPE_THICKNESS = 0.03;
-const LIVERY_STRIPE_INSET = 0.015;
-
 /** Logistics Choreography Phase, Commit 1: rolls a vehicle's wheel meshes
  *  by the arc-length equivalent of how far it actually moved this frame --
  *  reuses each vehicle's own already-computed per-frame position delta
@@ -400,10 +383,10 @@ function createYardSignage() {
 function createDockYard() {
   const group = new Group();
 
-  const dockTruck = createTruck(0xd8dce2, 40);
+  const dockTruck = createTruck(0xd8dce2, 40, { livery: true });
   dockTruck.position.set(DOCK_CENTER_X - 3, 0, DOCK_CENTER_Z + 14);
   dockTruck.rotation.y = Math.PI;
-  const queuedTruck = createTruck(0xc8ccd4, 41);
+  const queuedTruck = createTruck(0xc8ccd4, 41, { livery: true });
   queuedTruck.position.set(DOCK_CENTER_X - 3, 0, DOCK_CENTER_Z + 30);
   queuedTruck.rotation.y = Math.PI;
   group.add(dockTruck, queuedTruck);
@@ -632,7 +615,7 @@ function createHubSilhouettes() {
   return group;
 }
 
-function createTruck(color, seed = 0) {
+function createTruck(color, seed = 0, { livery = false } = {}) {
   const group = new Group();
   const bodyMaterial = new MeshStandardMaterial({ color, roughness: 0.4, metalness: 0.4 });
   // Cinematic Polish Phase, Commit 5: a small, deterministic per-truck wear
@@ -716,6 +699,37 @@ function createTruck(color, seed = 0) {
   });
   group.userData.indicators = indicators; // [left, right]
 
+  // Blue Brand Accent Phase, Commit 2: opt-in (not every createTruck()
+  // caller wants it -- the yard service vehicle deliberately doesn't,
+  // "a yard utility vehicle, not part of the main fleet"). Fixed procedural
+  // coordinates, the same convention as the headlights/tailLights above,
+  // sized against the cargo box's own known dimensions (BoxGeometry(3,3,8)
+  // above) rather than a computed bbox -- this is what lets the identical
+  // stripe apply correctly to both a purely procedural truck (the highway
+  // fleet) and a real-GLB-hulled one (dock/queued, see applyTruckModel()):
+  // the real hull is itself scaled to match this same footprint
+  // (TRUCK_TARGET_LENGTH), so fixed coordinates land in the right place
+  // either way, and don't need to be recomputed from a bbox that may or
+  // may not exist yet at construction time. Lit MeshStandardMaterial, not
+  // the unlit MeshBasicMaterial every Digital material uses -- a livery
+  // stripe is closer to real vinyl/paint (Brand is explicitly free to
+  // "blend warm and blue," unlike Digital's "stays blue regardless of
+  // lighting" rule) and picking up the scene's warm key light is what
+  // keeps it reading as part of the vehicle's own paint job rather than a
+  // flat decal glued on top.
+  if (livery) {
+    const stripeMaterial = new MeshStandardMaterial({ color: ELECTRIC_500, roughness: 0.35, metalness: 0.25 });
+    const stripeGeometry = new BoxGeometry(0.04, 0.35, 7.2);
+    const stripes = [-1, 1].map((side) => {
+      const stripe = new Mesh(stripeGeometry, stripeMaterial);
+      stripe.position.set(side * 1.54, 1.35, -0.2);
+      stripe.castShadow = true;
+      group.add(stripe);
+      return stripe;
+    });
+    group.userData.liveryStripes = stripes;
+  }
+
   // Asset Integration Phase, Ground Chapter Commit 1: the raw hull +
   // wheel primitives only -- everything the real deliveryVan GLB's own
   // single fused mesh already depicts once applyTruckModel() attaches it
@@ -780,27 +794,13 @@ function applyTruckModel(truckGroup, scene) {
     mesh.visible = false;
   });
   truckGroup.add(container);
-
-  // Blue Brand Accent Phase, Commit 1: see LIVERY_STRIPE_* constants' own
-  // doc comment. Added directly to truckGroup, a sibling of `container`
-  // rather than a child of it -- `container` carries the hull's own scale,
-  // and these ratios are already expressed in truckGroup's real (post-
-  // scale) units, so nesting inside container would scale them a second
-  // time.
-  const halfWidth = (size.x * scale) / 2;
-  const halfHeight = (size.y * scale) / 2;
-  const halfLength = (size.z * scale) / 2;
-  const stripeMaterial = new MeshBasicMaterial({ color: ELECTRIC_500 });
-  const stripeGeometry = new BoxGeometry(
-    LIVERY_STRIPE_THICKNESS,
-    halfHeight * 2 * LIVERY_STRIPE_HEIGHT_RATIO,
-    halfLength * 2 * LIVERY_STRIPE_LENGTH_RATIO
-  );
-  [-1, 1].forEach((side) => {
-    const stripe = new Mesh(stripeGeometry, stripeMaterial);
-    stripe.position.set(side * (halfWidth - LIVERY_STRIPE_INSET), halfHeight * 2 * LIVERY_STRIPE_Y_RATIO, 0);
-    truckGroup.add(stripe);
-  });
+  // The livery stripe (if this rig was built with { livery: true }) is a
+  // fixed-coordinate attachment from createTruck() itself, not rebuilt
+  // here -- see that function's own doc comment for why fixed procedural
+  // coordinates land correctly on the real hull too. It's already a
+  // sibling of `truckGroup`'s other always-visible attachments
+  // (headlights/tailLights), so it survives this swap for free, same as
+  // they do.
 }
 
 /** A fleet in constant, layered motion (Section 23: "the busiest midground
@@ -813,7 +813,7 @@ function createFleet() {
   const colors = [0xd2d6dc, 0xdde1e6, 0xc4c8d0];
 
   LANE_X.forEach((x, i) => {
-    const truck = createTruck(colors[i % colors.length], i);
+    const truck = createTruck(colors[i % colors.length], i, { livery: true });
     const z = REGION_Z - HIGHWAY_LENGTH / 2 + ((i * HIGHWAY_LENGTH) / LANE_X.length);
     truck.position.set(x, 0, z);
     truck.rotation.y = i % 2 === 0 ? 0 : Math.PI;

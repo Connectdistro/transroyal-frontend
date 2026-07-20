@@ -94,18 +94,6 @@ const VEHICLE_MODEL_ROTATION_Y = Math.PI;
 // end -- not a guessed round number.
 const VEHICLE_TARGET_LENGTH = 8.8;
 
-// Blue Brand Accent Phase, Commit 1: same rationale as Ground's own
-// LIVERY_STRIPE_* constants (GroundEnvironment.js) -- the project's Brand
-// material category was defined but unused until now; reuses ELECTRIC_500,
-// this codebase's single canonical blue, not a new hex. Duplicated rather
-// than imported, matching this codebase's own convention of sibling
-// environment files staying independent.
-const LIVERY_STRIPE_LENGTH_RATIO = 0.75;
-const LIVERY_STRIPE_HEIGHT_RATIO = 0.08;
-const LIVERY_STRIPE_Y_RATIO = 0.42;
-const LIVERY_STRIPE_THICKNESS = 0.03;
-const LIVERY_STRIPE_INSET = 0.015;
-
 /** Asset Integration Phase, Pickup Chapter Commit 1: swaps the procedural
  *  vehicle's cargo/cab/windshield/wheels for the real deliveryVan GLB.
  *  Identical technique to Ground's applyTruckModel() (recenter X/Z on the
@@ -146,26 +134,12 @@ function applyVehicleModel(vehicleGroup, scene) {
     mesh.visible = false;
   });
   vehicleGroup.add(container);
-
-  // Blue Brand Accent Phase, Commit 1: see LIVERY_STRIPE_* constants' own
-  // doc comment. Added directly to vehicleGroup, a sibling of `container`
-  // rather than a child of it -- these ratios are already expressed in
-  // vehicleGroup's real (post-scale) units, so nesting inside container
-  // would scale them a second time.
-  const halfWidth = (size.x * scale) / 2;
-  const halfHeight = (size.y * scale) / 2;
-  const halfLength = (size.z * scale) / 2;
-  const stripeMaterial = new MeshBasicMaterial({ color: ELECTRIC_500 });
-  const stripeGeometry = new BoxGeometry(
-    LIVERY_STRIPE_THICKNESS,
-    halfHeight * 2 * LIVERY_STRIPE_HEIGHT_RATIO,
-    halfLength * 2 * LIVERY_STRIPE_LENGTH_RATIO
-  );
-  [-1, 1].forEach((side) => {
-    const stripe = new Mesh(stripeGeometry, stripeMaterial);
-    stripe.position.set(side * (halfWidth - LIVERY_STRIPE_INSET), halfHeight * 2 * LIVERY_STRIPE_Y_RATIO, 0);
-    vehicleGroup.add(stripe);
-  });
+  // The livery stripe is a fixed-coordinate attachment from createVehicle()
+  // itself, not rebuilt here -- see that function's own doc comment for
+  // why fixed procedural coordinates land correctly on the real hull too.
+  // It's already a sibling of vehicleGroup's other always-visible
+  // attachments (headlights/tailLights), so it survives this swap for
+  // free, same as they do.
 }
 
 function createDockFloor() {
@@ -293,6 +267,25 @@ function createVehicle() {
     const head = new Mesh(new BoxGeometry(0.15, 0.2, 0.05), headMaterial);
     head.position.set(x, 1.5, 5.42);
     group.add(head);
+  });
+
+  // Blue Brand Accent Phase, Commit 2: same rationale as Ground's own
+  // livery stripe (GroundEnvironment.js's createTruck() -- see its own doc
+  // comment). Fixed procedural coordinates against the cargo box's own
+  // known dimensions (BoxGeometry(3.4,3,6.5) above), not a computed bbox,
+  // so it applies correctly whether this vehicle is still fully procedural
+  // or has had its hull swapped for the real deliveryVan GLB (which is
+  // itself scaled to match this same footprint -- see VEHICLE_TARGET_LENGTH).
+  // Lit MeshStandardMaterial, not the unlit MeshBasicMaterial every Digital
+  // material uses -- picking up the scene's warm key light is what keeps
+  // it reading as part of the vehicle's own paint job.
+  const stripeMaterial = new MeshStandardMaterial({ color: ELECTRIC_500, roughness: 0.35, metalness: 0.25 });
+  const stripeGeometry = new BoxGeometry(0.04, 0.3, 5.6);
+  [-1, 1].forEach((side) => {
+    const stripe = new Mesh(stripeGeometry, stripeMaterial);
+    stripe.position.set(side * 1.72, 1.3, 0.2);
+    stripe.castShadow = true;
+    group.add(stripe);
   });
 
   // Track A1: a dark interior backdrop, fixed, revealed once the door
