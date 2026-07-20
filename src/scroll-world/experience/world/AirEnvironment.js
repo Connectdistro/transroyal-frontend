@@ -114,12 +114,48 @@ const FLIGHT_SUNLIGHT_HALF_LIFE_MS = 1200;
 // visibility/angle targets (the same idiom the destination marker's
 // approach ramp already uses), not a literal ground sequence.
 const GEAR_EXTENDED_WINDOW = 0.05;
-const GEAR_HALF_LIFE_MS = 500;
+// Motion Weight Pass: nose and main gear ease independently toward the same
+// target (never a hand-authored delay timer) -- the nose leg's own faster
+// half-life makes it lead the lift/touchdown sequence for free, and the
+// main legs' much slower half-life is what turns retraction into the
+// several-seconds process real gear takes, not a half-second snap. Confirmed
+// with the user: still no literal runway/ground-contact geometry -- this is
+// the existing symmetric-window abstraction, just two eased rates instead
+// of one.
+const GEAR_NOSE_HALF_LIFE_MS = 350;
+const GEAR_MAIN_HALF_LIFE_MS = 2200;
 const FLAP_DEPLOY_WINDOW = 0.08;
 const FLAP_MAX_ANGLE = (18 * Math.PI) / 180;
 const FLAP_HALF_LIFE_MS = 500;
-const ROTATION_PITCH_MAX = (6 * Math.PI) / 180;
+// Widened from the previous 6 deg into the 8-12 deg real-world rotation
+// range, and eased (smoothstep, see rotationEnvelope's own use in update())
+// rather than a linear ramp -- reads as a deliberate rotation, not a twitch.
+const ROTATION_PITCH_MAX = (10 * Math.PI) / 180;
 const ROTATION_PITCH_WINDOW = 0.06;
+// Motion Weight Pass: a smaller, mirrored pitch bias right at the OPPOSITE
+// end of the current leg from ROTATION_PITCH_MAX above -- a liftoff
+// "rotation" happens at the leg's departure end, this "flare" happens at
+// its arrival end, the same idiom the destination marker's own approach
+// ramp already uses, just applied to pitch instead of light intensity.
+const FLARE_PITCH_MAX = (4 * Math.PI) / 180;
+const FLARE_WINDOW = 0.035;
+
+// Motion Weight Pass: the "throttle up, nothing moves yet while thrust
+// builds" beat -- flightSpeed's own target is held at 0 for this long after
+// a hold ends, before the taper-based acceleration below is allowed to
+// engage, so departure reads as two distinct beats (spool, then roll) not
+// one continuous ease. Engine glow and the airframe vibration below both
+// ramp against this same timer independent of actual motion, so the
+// aircraft visibly "comes alive" before it ever moves.
+const SPOOL_DURATION_MS = 1100;
+const SPOOL_VIBRATION_BOOST = 3;
+// A small, brief squat-then-release on the aircraft's own world Y during
+// the spool window -- "compresses slightly under thrust, then releases as
+// it starts rolling." Single half-sine pulse (peaks at the window's
+// midpoint), not a spring simulation -- this chapter has no literal gear/
+// runway contact to actually compress against, so the cue stays subtle and
+// abstracted like every other ground-mechanic cue here.
+const SPOOL_COMPRESSION_AMOUNT = 0.06;
 
 // Logistics Choreography Phase, Commit 6: aircraft-mounted lights and
 // engine glow. Standard aviation nav-light convention: red on the left
@@ -287,24 +323,32 @@ function createFlightPath() {
  *  0) through cruise -- implies "just left/about to touch down" without
  *  the chapter ever depicting a literal runway (see this file's own
  *  altitude-only design intent). */
+/** Motion Weight Pass: nose and main gear are now separate sub-groups
+ *  (previously one flat group scaled uniformly) so update() can ease each
+ *  toward the shared gear target at its own rate -- see GEAR_NOSE_HALF_LIFE_MS/
+ *  GEAR_MAIN_HALF_LIFE_MS's own doc comment for why. */
 function createLandingGear() {
   const group = new Group();
+  const noseGear = new Group();
+  const mainGear = new Group();
+  group.add(noseGear, mainGear);
+
   const strutMaterial = new MeshStandardMaterial({ color: ENGINE_COLOR, roughness: 0.5, metalness: 0.5 });
   const wheelMaterial = new MeshStandardMaterial({ color: 0x14181f, roughness: 0.7, metalness: 0.2 });
   const legs = [
-    [0, -2.4 * CARGO_PLANE_HEIGHT_RATIO, -7 * CARGO_PLANE_LENGTH_RATIO], // nose gear
-    [-2.6, -2.6 * CARGO_PLANE_HEIGHT_RATIO, 1 * CARGO_PLANE_LENGTH_RATIO], // left main gear
-    [2.6, -2.6 * CARGO_PLANE_HEIGHT_RATIO, 1 * CARGO_PLANE_LENGTH_RATIO], // right main gear
+    [noseGear, 0, -2.4 * CARGO_PLANE_HEIGHT_RATIO, -7 * CARGO_PLANE_LENGTH_RATIO],
+    [mainGear, -2.6, -2.6 * CARGO_PLANE_HEIGHT_RATIO, 1 * CARGO_PLANE_LENGTH_RATIO],
+    [mainGear, 2.6, -2.6 * CARGO_PLANE_HEIGHT_RATIO, 1 * CARGO_PLANE_LENGTH_RATIO],
   ];
-  legs.forEach(([x, y, z]) => {
+  legs.forEach(([parent, x, y, z]) => {
     const strut = new Mesh(new CylinderGeometry(0.08, 0.08, 1.2, 6), strutMaterial);
     strut.position.set(x, y + 0.6, z);
     const wheel = new Mesh(new CylinderGeometry(0.35, 0.35, 0.25, 10), wheelMaterial);
     wheel.rotation.z = Math.PI / 2;
     wheel.position.set(x, y, z);
-    group.add(strut, wheel);
+    parent.add(strut, wheel);
   });
-  return group;
+  return { group, noseGear, mainGear };
 }
 
 /** A simple, legible cargo aircraft from the same flat-color primitive
@@ -395,8 +439,9 @@ function createCargoAircraft() {
     return flapGroup;
   });
 
-  const gear = createLandingGear();
-  gear.scale.setScalar(0);
+  const { group: gear, noseGear, mainGear } = createLandingGear();
+  noseGear.scale.setScalar(0);
+  mainGear.scale.setScalar(0);
   group.add(gear);
 
   // Logistics Choreography Phase, Commit 6: anti-collision beacon (small
@@ -424,6 +469,8 @@ function createCargoAircraft() {
   group.userData.cargoPod = cargoPod;
   group.userData.flapGroups = flapGroups;
   group.userData.gear = gear;
+  group.userData.noseGear = noseGear;
+  group.userData.mainGear = mainGear;
   group.userData.engineGlowMaterial = engineGlowMaterial;
   group.userData.beaconLight = beaconLight;
   group.userData.taxiLight = taxiLight;
@@ -650,9 +697,15 @@ export class AirEnvironment {
     this.neighborBoost = 0;
     this.neighborBoostTarget = 0;
     this.destinationBoost = 1;
-    this.gearScale = 0;
+    this.noseGearScale = 0;
+    this.mainGearScale = 0;
     this.flapAngle = 0;
     this.taxiLightIntensity = 0;
+    // Motion Weight Pass: ms elapsed since the current 'outbound'/'inbound'
+    // leg began -- reset to 0 whenever a hold ends and real movement is
+    // about to (re)start, drives the spool-then-roll gating in update().
+    this.legElapsedMs = 0;
+    this.vibrationBoost = 0;
 
     // Section 23: "both read at greater distance and softer falloff than
     // any other chapter." These two params are only this light's initial
@@ -727,11 +780,27 @@ export class AirEnvironment {
     // starts -- outbound -> destinationHold -> inbound -> originHold ->
     // outbound, indefinitely.
     const deltaSeconds = time.delta / 1000;
+    let spoolT = 1;
     if (this.flightState === 'outbound' || this.flightState === 'inbound') {
       this.flightDirection = this.flightState === 'outbound' ? 1 : -1;
-      const taperToEnd = Math.max(FLIGHT_MIN_TAPER, Math.min(1, (1 - this.flightProgress) / FLIGHT_TAPER_DISTANCE));
-      const taperFromStart = Math.max(FLIGHT_MIN_TAPER, Math.min(1, this.flightProgress / FLIGHT_TAPER_DISTANCE));
-      const desiredSpeed = FLIGHT_CRUISE_SPEED * Math.min(taperToEnd, taperFromStart);
+      this.legElapsedMs += time.delta;
+      // Motion Weight Pass: "throttle up, nothing moves yet while thrust
+      // builds" -- desiredSpeed stays exactly 0 for the whole spool window
+      // regardless of the taper below, so departure reads as two distinct
+      // beats (spool, then roll) rather than one continuous ease.
+      spoolT = Math.min(1, this.legElapsedMs / SPOOL_DURATION_MS);
+      let desiredSpeed = 0;
+      if (spoolT >= 1) {
+        const taperToEnd = Math.max(FLIGHT_MIN_TAPER, Math.min(1, (1 - this.flightProgress) / FLIGHT_TAPER_DISTANCE));
+        const taperFromStart = Math.max(FLIGHT_MIN_TAPER, Math.min(1, this.flightProgress / FLIGHT_TAPER_DISTANCE));
+        const taper = Math.min(taperToEnd, taperFromStart);
+        // Motion Weight Pass: smoothstep instead of the previous raw linear
+        // taper -- slow to build, a more decisive middle ramp, easing again
+        // into the approach -- reads closer to real aircraft acceleration
+        // than a constant-rate ramp.
+        const easedTaper = taper * taper * (3 - 2 * taper);
+        desiredSpeed = FLIGHT_CRUISE_SPEED * easedTaper;
+      }
       this.flightSpeed += (desiredSpeed - this.flightSpeed) * dampFactor(FLIGHT_VELOCITY_HALF_LIFE_MS, time.delta);
       this.flightProgress += this.flightSpeed * this.flightDirection * deltaSeconds;
       if (this.flightDirection > 0 && this.flightProgress >= 1) {
@@ -749,8 +818,18 @@ export class AirEnvironment {
       this.flightHoldTimer += time.delta;
       if (this.flightHoldTimer >= FLIGHT_HOLD_DURATION_MS) {
         this.flightState = this.flightState === 'destinationHold' ? 'inbound' : 'outbound';
+        this.legElapsedMs = 0;
       }
     }
+
+    // Motion Weight Pass: ramps up across the spool window (engines
+    // spooling before the aircraft actually moves), eases back down once
+    // real motion begins -- feeds both the airframe-vibration jitter and
+    // the brief gear-compression squat below, the same target-plus-damped-
+    // ease idiom as everything else in this file.
+    const vibrationTarget = spoolT < 1 ? 1 + (SPOOL_VIBRATION_BOOST - 1) * spoolT : 1;
+    this.vibrationBoost += (vibrationTarget - this.vibrationBoost) * dampFactor(400, time.delta);
+    const compressionEnvelope = spoolT < 1 ? Math.sin(spoolT * Math.PI) * SPOOL_COMPRESSION_AMOUNT : 0;
 
     // See this.threadReveal's own doc comment (constructor) -- grows only
     // on the way out, frozen (still delivered) through the hold and the
@@ -781,6 +860,12 @@ export class AirEnvironment {
     // orienting itself as though still headed for the destination.
     this.flightPath.getPointAt(this.flightProgress, scratchPosition);
     this.aircraft.position.copy(scratchPosition);
+    // Motion Weight Pass: the spool-window squat-then-release from above,
+    // applied after the curve sample so it isn't overwritten by it --
+    // "compresses slightly under thrust, then releases as it starts
+    // rolling," the one physical cue this chapter borrows from ground
+    // contact without ever depicting an actual runway.
+    this.aircraft.position.y -= compressionEnvelope;
     const lookAheadT = Math.max(0, Math.min(1, this.flightProgress + FLIGHT_LOOK_AHEAD * this.flightDirection));
     this.flightPath.getTangentAt(lookAheadT, scratchLookAt);
     scratchLookAt.multiplyScalar(this.flightDirection);
@@ -835,11 +920,16 @@ export class AirEnvironment {
     // Lightweight atmosphere: sub-degree wingtip flex and pitch/roll jitter
     // read as engine vibration, recomputed fresh each frame on top of the
     // curve-driven base orientation above (never accumulated frame to
-    // frame, so there's no drift).
+    // frame, so there's no drift). Scaled by vibrationBoost (Motion Weight
+    // Pass) -- during the spool window this reads as "engines spooling up"
+    // before the aircraft ever moves, easing back to the calm baseline once
+    // it's actually rolling; during a hold it's already this baseline
+    // amount, which is what keeps the aircraft feeling "alive" while
+    // stationary rather than inert.
     const wings = this.aircraft.userData.wings;
-    if (wings) wings.rotation.z = Math.sin(time.elapsed / 260) * 0.01;
-    this.aircraft.rotateX(Math.sin(time.elapsed / 340 + 2) * 0.0015);
-    this.aircraft.rotateZ(Math.sin(time.elapsed / 410 + 4) * 0.001);
+    if (wings) wings.rotation.z = Math.sin(time.elapsed / 260) * 0.01 * this.vibrationBoost;
+    this.aircraft.rotateX(Math.sin(time.elapsed / 340 + 2) * 0.0015 * this.vibrationBoost);
+    this.aircraft.rotateZ(Math.sin(time.elapsed / 410 + 4) * 0.001 * this.vibrationBoost);
 
     // Logistics Choreography Phase, Commit 5: a brief "rotation" pitch
     // bias right at departure, layered additively via rotateX (same
@@ -853,18 +943,38 @@ export class AirEnvironment {
     // always progress=0 -- outbound's own departure is progress=0,
     // inbound's is progress=1.
     const legStartProgress = this.flightDirection > 0 ? 0 : 1;
-    const rotationEnvelope = Math.max(0, 1 - Math.abs(this.flightProgress - legStartProgress) / ROTATION_PITCH_WINDOW);
+    const rotationLinear = Math.max(0, 1 - Math.abs(this.flightProgress - legStartProgress) / ROTATION_PITCH_WINDOW);
+    // Motion Weight Pass: smoothstep instead of the previous straight-line
+    // ramp -- reads as a deliberate, controlled rotation rather than a
+    // linear twitch that starts and ends at full speed.
+    const rotationEnvelope = rotationLinear * rotationLinear * (3 - 2 * rotationLinear);
     this.aircraft.rotateX(rotationEnvelope * ROTATION_PITCH_MAX);
+
+    // Motion Weight Pass: a smaller, mirrored "flare" pitch right at the
+    // CURRENT leg's arrival end (the opposite end from legStartProgress
+    // above) -- real aircraft raise the nose slightly just before
+    // touchdown to arrest the descent; this reads as that beat without any
+    // literal ground contact to flare against.
+    const legEndProgress = this.flightDirection > 0 ? 1 : 0;
+    const flareLinear = Math.max(0, 1 - Math.abs(this.flightProgress - legEndProgress) / FLARE_WINDOW);
+    const flareEnvelope = flareLinear * flareLinear * (3 - 2 * flareLinear);
+    this.aircraft.rotateX(flareEnvelope * FLARE_PITCH_MAX);
 
     // Gear and flaps: extended/deployed near departure and arrival,
     // retracted/flat through cruise -- a pure function of the current
     // flightProgress (same idiom as the destination marker's approach
     // ramp below), so it responds correctly on every leg regardless of
-    // which direction progress is currently moving.
+    // which direction progress is currently moving. Nose and main gear
+    // ease toward the same target at different rates (see
+    // GEAR_NOSE_HALF_LIFE_MS/GEAR_MAIN_HALF_LIFE_MS's own doc comment) --
+    // the nose leads on both ends, and retraction takes several seconds
+    // instead of snapping.
     const gearTarget =
       this.flightProgress < GEAR_EXTENDED_WINDOW || this.flightProgress > 1 - GEAR_EXTENDED_WINDOW ? 1 : 0;
-    this.gearScale += (gearTarget - this.gearScale) * dampFactor(GEAR_HALF_LIFE_MS, time.delta);
-    this.aircraft.userData.gear.scale.setScalar(this.gearScale);
+    this.noseGearScale += (gearTarget - this.noseGearScale) * dampFactor(GEAR_NOSE_HALF_LIFE_MS, time.delta);
+    this.mainGearScale += (gearTarget - this.mainGearScale) * dampFactor(GEAR_MAIN_HALF_LIFE_MS, time.delta);
+    this.aircraft.userData.noseGear.scale.setScalar(this.noseGearScale);
+    this.aircraft.userData.mainGear.scale.setScalar(this.mainGearScale);
 
     const flapTarget =
       this.flightProgress < FLAP_DEPLOY_WINDOW || this.flightProgress > 1 - FLAP_DEPLOY_WINDOW ? FLAP_MAX_ANGLE : 0;
