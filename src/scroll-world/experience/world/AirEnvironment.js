@@ -90,15 +90,13 @@ const CARGO_SWAY_HALF_LIFE_MS = 380;
 const NEIGHBOR_BOOST_HALF_LIFE_MS = 500;
 const NEIGHBOR_PROMINENCE_SCALE = 0.35;
 
-// Loop behavior (Commit 4): a brief held arrival at the destination marker's
-// brightest, then an eased rewind back to 0 -- the same
-// dwell-then-transition idiom as Ground's dock cycle phases, just simpler
-// (one continuous journey, no multi-actor choreography). The rewind is
-// deliberately much faster than the forward flight so it reads as a
-// distinct "reset" beat rather than a naturalistic reverse flight.
+// Loop behavior (Commit 4, revised for a real round trip): a brief held
+// dwell at EACH endpoint between legs -- the same dwell-then-transition
+// idiom as Ground's dock cycle phases. The return leg is a genuine flight
+// (same taper-speed physics as the outbound leg, direction reversed), not
+// a fast rewind of the progress value -- see the 4-state FSM in update()
+// (outbound -> destinationHold -> inbound -> originHold -> repeat).
 const FLIGHT_HOLD_DURATION_MS = 1800;
-const FLIGHT_RESET_HALF_LIFE_MS = 450;
-const FLIGHT_RESET_SNAP_THRESHOLD = 0.01;
 
 // "Sunlight catching the fuselage" on approach (Commit 4): a small extra
 // multiplier on the key light only, ramping up over the flight's final
@@ -638,8 +636,14 @@ export class AirEnvironment {
     this.group.add(this.destinationMarker.group);
     this.flightProgress = 0;
     this.flightSpeed = 0;
-    this.flightState = 'flying';
+    this.flightDirection = 1;
+    this.flightState = 'outbound';
     this.flightHoldTimer = 0;
+    // Grows with flightProgress during 'outbound' only, frozen during
+    // 'destinationHold'/'inbound' (the shipment stays visibly delivered
+    // for the whole return leg, not un-delivered), reset to 0 during
+    // 'originHold' so a fresh trip regrows its own thread from scratch.
+    this.threadReveal = 0;
     this.flightSunlightBoost = 1;
     this.cargoBankLag = 0;
     this.neighborBoost = 0;
@@ -711,38 +715,49 @@ export class AirEnvironment {
       line.material.opacity = line.material.userData.baseOpacity * pulse;
     });
 
-    // Commit 3/4: eased speed chases a target that tapers near both curve
-    // ends (accelerate off P0, cruise, decelerate into approach) while
-    // 'flying'; on reaching the destination it holds briefly (the
-    // destination marker's brightest beat), then eases back to 0 and
-    // resumes -- everything downstream (thread reveal, destination ramp)
-    // already reads flightProgress and needs no separate reset.
+    // A real round trip: 'outbound' (0->1) and 'inbound' (1->0) both use
+    // the exact same eased-speed-chases-a-taper-target physics (accelerate
+    // off the departure end, cruise, decelerate into the approach) --
+    // taper is a pure function of flightProgress regardless of which way
+    // it's currently moving, so the two legs share this branch, only the
+    // sign of the integration step differs. Each leg ends in its own dwell
+    // ('destinationHold' / 'originHold', the destination marker's
+    // brightest beat happens during the former) before the next leg
+    // starts -- outbound -> destinationHold -> inbound -> originHold ->
+    // outbound, indefinitely.
     const deltaSeconds = time.delta / 1000;
-    if (this.flightState === 'flying') {
+    if (this.flightState === 'outbound' || this.flightState === 'inbound') {
+      this.flightDirection = this.flightState === 'outbound' ? 1 : -1;
       const taperToEnd = Math.max(FLIGHT_MIN_TAPER, Math.min(1, (1 - this.flightProgress) / FLIGHT_TAPER_DISTANCE));
       const taperFromStart = Math.max(FLIGHT_MIN_TAPER, Math.min(1, this.flightProgress / FLIGHT_TAPER_DISTANCE));
       const desiredSpeed = FLIGHT_CRUISE_SPEED * Math.min(taperToEnd, taperFromStart);
       this.flightSpeed += (desiredSpeed - this.flightSpeed) * dampFactor(FLIGHT_VELOCITY_HALF_LIFE_MS, time.delta);
-      this.flightProgress += this.flightSpeed * deltaSeconds;
-      if (this.flightProgress >= 1) {
+      this.flightProgress += this.flightSpeed * this.flightDirection * deltaSeconds;
+      if (this.flightDirection > 0 && this.flightProgress >= 1) {
         this.flightProgress = 1;
-        this.flightState = 'holding';
+        this.flightState = 'destinationHold';
+        this.flightHoldTimer = 0;
+      } else if (this.flightDirection < 0 && this.flightProgress <= 0) {
+        this.flightProgress = 0;
+        this.flightState = 'originHold';
         this.flightHoldTimer = 0;
       }
-    } else if (this.flightState === 'holding') {
+    } else {
+      // 'destinationHold' or 'originHold'
       this.flightSpeed = 0;
       this.flightHoldTimer += time.delta;
       if (this.flightHoldTimer >= FLIGHT_HOLD_DURATION_MS) {
-        this.flightState = 'resetting';
+        this.flightState = this.flightState === 'destinationHold' ? 'inbound' : 'outbound';
       }
-    } else {
-      // 'resetting'
-      this.flightSpeed = 0;
-      this.flightProgress -= this.flightProgress * dampFactor(FLIGHT_RESET_HALF_LIFE_MS, time.delta);
-      if (this.flightProgress <= FLIGHT_RESET_SNAP_THRESHOLD) {
-        this.flightProgress = 0;
-        this.flightState = 'flying';
-      }
+    }
+
+    // See this.threadReveal's own doc comment (constructor) -- grows only
+    // on the way out, frozen (still delivered) through the hold and the
+    // whole return leg, cleared right as a fresh outbound leg begins.
+    if (this.flightState === 'outbound') {
+      this.threadReveal = this.flightProgress;
+    } else if (this.flightState === 'originHold') {
+      this.threadReveal = 0;
     }
 
     const sunlightTarget =
@@ -754,21 +769,33 @@ export class AirEnvironment {
     this.keyLight.intensity = this.baseKeyIntensity * this.activityWeight * this.flightSunlightBoost;
 
     // Position and orientation, sampled fresh from the curve every frame --
-    // smooth by construction (no snapping), constant forward orientation,
-    // and arc-length parameterized so motion speed reads evenly along the
-    // visually curved path rather than just parametrically.
+    // smooth by construction (no snapping), and arc-length parameterized
+    // so motion speed reads evenly along the visually curved path rather
+    // than just parametrically. getTangentAt() always returns the curve's
+    // own increasing-parameter direction regardless of which way the
+    // aircraft is actually flying -- every tangent sample below is scaled
+    // by flightDirection so "forward" always means the aircraft's real
+    // direction of travel, not just "toward P5"; on the inbound leg this
+    // is what makes it fly nose-first back toward the origin instead of
+    // orienting itself as though still headed for the destination.
     this.flightPath.getPointAt(this.flightProgress, scratchPosition);
     this.aircraft.position.copy(scratchPosition);
-    this.flightPath.getTangentAt(Math.min(1, this.flightProgress + FLIGHT_LOOK_AHEAD), scratchLookAt);
+    const lookAheadT = Math.max(0, Math.min(1, this.flightProgress + FLIGHT_LOOK_AHEAD * this.flightDirection));
+    this.flightPath.getTangentAt(lookAheadT, scratchLookAt);
+    scratchLookAt.multiplyScalar(this.flightDirection);
     scratchLookAt.add(scratchPosition);
     this.aircraft.lookAt(scratchLookAt);
 
     // Banking: compare the tangent at the current progress against a small
-    // step ahead, project the heading change onto the aircraft's own local
-    // right vector (post-lookAt), scale and clamp -- a cheap, standard
-    // banked-turn approximation layered on top via a local-space roll.
+    // step ahead (in the actual direction of travel), project the heading
+    // change onto the aircraft's own local right vector (post-lookAt),
+    // scale and clamp -- a cheap, standard banked-turn approximation
+    // layered on top via a local-space roll.
     this.flightPath.getTangentAt(this.flightProgress, scratchTangentNow);
-    this.flightPath.getTangentAt(Math.min(1, this.flightProgress + FLIGHT_BANK_LOOK_AHEAD), scratchTangentAhead);
+    scratchTangentNow.multiplyScalar(this.flightDirection);
+    const bankAheadT = Math.max(0, Math.min(1, this.flightProgress + FLIGHT_BANK_LOOK_AHEAD * this.flightDirection));
+    this.flightPath.getTangentAt(bankAheadT, scratchTangentAhead);
+    scratchTangentAhead.multiplyScalar(this.flightDirection);
     scratchHeadingDelta.copy(scratchTangentAhead).sub(scratchTangentNow);
     scratchRight.set(1, 0, 0).applyQuaternion(this.aircraft.quaternion);
     const bankSignal = scratchHeadingDelta.dot(scratchRight) * FLIGHT_BANK_GAIN;
@@ -816,18 +843,23 @@ export class AirEnvironment {
     // Logistics Choreography Phase, Commit 5: a brief "rotation" pitch
     // bias right at departure, layered additively via rotateX (same
     // technique as the wingtip jitter above), active only in the first
-    // sliver of flightProgress and easing out as the climb settles into
+    // sliver of the CURRENT leg and easing out as the climb settles into
     // its own curve-derived pitch -- a distinct "liftoff" read without
     // touching the flight-path curve itself. Positive rotateX pitches the
-    // nose (local -Z) upward.
-    const rotationEnvelope = Math.max(0, 1 - this.flightProgress / ROTATION_PITCH_WINDOW);
+    // nose (local -Z) upward. A round trip departs from both ends (origin
+    // on the way out, the destination on the way back), so this reads off
+    // whichever end the current leg actually started from rather than
+    // always progress=0 -- outbound's own departure is progress=0,
+    // inbound's is progress=1.
+    const legStartProgress = this.flightDirection > 0 ? 0 : 1;
+    const rotationEnvelope = Math.max(0, 1 - Math.abs(this.flightProgress - legStartProgress) / ROTATION_PITCH_WINDOW);
     this.aircraft.rotateX(rotationEnvelope * ROTATION_PITCH_MAX);
 
     // Gear and flaps: extended/deployed near departure and arrival,
     // retracted/flat through cruise -- a pure function of the current
     // flightProgress (same idiom as the destination marker's approach
-    // ramp below), so it responds correctly whether progress is
-    // currently increasing ('flying') or decreasing ('resetting').
+    // ramp below), so it responds correctly on every leg regardless of
+    // which direction progress is currently moving.
     const gearTarget =
       this.flightProgress < GEAR_EXTENDED_WINDOW || this.flightProgress > 1 - GEAR_EXTENDED_WINDOW ? 1 : 0;
     this.gearScale += (gearTarget - this.gearScale) * dampFactor(GEAR_HALF_LIFE_MS, time.delta);
@@ -859,7 +891,7 @@ export class AirEnvironment {
       ENGINE_GLOW_MAX_OPACITY * Math.min(1, this.flightSpeed / FLIGHT_CRUISE_SPEED);
 
     const revealIndices = Math.floor(
-      (this.deliveryThread.indexCount * this.flightProgress) / THREAD_INDICES_PER_RING
+      (this.deliveryThread.indexCount * this.threadReveal) / THREAD_INDICES_PER_RING
     ) * THREAD_INDICES_PER_RING;
     this.deliveryThread.overlayGeometry.setDrawRange(0, revealIndices);
 
