@@ -163,6 +163,76 @@ body {
   font-weight: 700;
 }
 
+.gallery-nodes {
+  position: absolute;
+  top: 66px;
+  right: 16px;
+  width: 320px;
+  max-height: calc(100vh - 180px);
+  background: rgb(20 20 24 / 88%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 10px;
+  backdrop-filter: blur(6px);
+  display: flex;
+  flex-direction: column;
+}
+
+.gallery-nodes[hidden] {
+  display: none;
+}
+
+.gallery-nodes-header {
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #9a9aa2;
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
+}
+
+.gallery-nodes-list {
+  overflow-y: auto;
+  padding: 6px 4px;
+}
+
+.gallery-node {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.gallery-node:hover {
+  background: rgb(255 255 255 / 6%);
+}
+
+.gallery-node input[type='checkbox'] {
+  flex-shrink: 0;
+}
+
+.gallery-node-name {
+  color: #e8e8ec;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gallery-node-type {
+  color: #6f6f78;
+  flex-shrink: 0;
+}
+
+.gallery-node-meta {
+  color: #9a9aa2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
 .gallery-loading {
   position: absolute;
   bottom: 90px;

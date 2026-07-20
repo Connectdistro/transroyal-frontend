@@ -107,6 +107,11 @@ export function mountGalleryUI(root, gallery) {
     </div>
     <div class="gallery-controls">
       ${CONTROLS.map((c) => `<button class="gallery-btn" data-control="${c.key}"><span class="key">${c.key}</span>${c.label}</button>`).join('')}
+      <button class="gallery-btn" data-toggle-nodes>Node Inspector</button>
+    </div>
+    <div class="gallery-nodes" data-nodes hidden>
+      <div class="gallery-nodes-header">Scene Graph</div>
+      <div class="gallery-nodes-list" data-nodes-list></div>
     </div>
     <div class="gallery-loading" data-loading hidden>Loading asset&hellip;</div>
     <div class="gallery-error" data-error hidden></div>
@@ -160,6 +165,41 @@ export function mountGalleryUI(root, gallery) {
     renderControls();
   }
 
+  const nodesPanel = overlay.querySelector('[data-nodes]');
+  const nodesList = overlay.querySelector('[data-nodes-list]');
+
+  function renderNodeTree() {
+    if (nodesPanel.hidden) return;
+    nodesList.innerHTML = gallery.nodeTree
+      .map((node) => {
+        const indent = node.depth * 16;
+        const parts = [
+          node.isMesh && node.triangles !== null ? `${node.triangles.toLocaleString()} tri` : null,
+          node.materialName ? `mat: ${node.materialName}` : null,
+          node.bbox ? `${node.bbox.x.toFixed(2)}×${node.bbox.y.toFixed(2)}×${node.bbox.z.toFixed(2)}` : null,
+        ].filter(Boolean);
+        return `
+          <label class="gallery-node" style="padding-left:${indent}px">
+            <input type="checkbox" data-node-toggle="${node.id}" ${node.visible ? 'checked' : ''} />
+            <span class="gallery-node-name">${node.name}</span>
+            <span class="gallery-node-type">${node.type}</span>
+            ${parts.length ? `<span class="gallery-node-meta">${parts.join(' · ')}</span>` : ''}
+          </label>`;
+      })
+      .join('');
+
+    nodesList.querySelectorAll('[data-node-toggle]').forEach((input) => {
+      input.addEventListener('change', () => {
+        gallery.toggleNode(Number(input.dataset.nodeToggle));
+      });
+    });
+  }
+
+  overlay.querySelector('[data-toggle-nodes]').addEventListener('click', () => {
+    nodesPanel.hidden = !nodesPanel.hidden;
+    if (!nodesPanel.hidden) renderNodeTree();
+  });
+
   gallery.on('asset:loading', (entry) => {
     loadingEl.hidden = false;
     errorEl.hidden = true;
@@ -169,6 +209,7 @@ export function mountGalleryUI(root, gallery) {
   gallery.on('asset:loaded', (stats) => {
     loadingEl.hidden = true;
     renderStats(stats);
+    renderNodeTree();
   });
 
   gallery.on('asset:error', ({ entry, error }) => {

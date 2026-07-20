@@ -243,6 +243,82 @@ export class AssetGallery extends EventEmitter {
     this.mixer = null;
     this.action = null;
     this.currentClips = [];
+    this.nodeMap = new Map();
+    this.nodeTree = [];
+  }
+
+  /** Full recursive scene-graph dump for the current asset -- every node,
+   *  not just meshes, since an author-named Group/Object3D (a hinge pivot,
+   *  a LOD switch, an empty used as a locator) is exactly the kind of thing
+   *  worth seeing when a downloaded model doesn't match its own screenshot.
+   *  Each node gets a stable numeric id (this call's traversal order) keyed
+   *  into `this.nodeMap` so toggleNode() can look the real Object3D back up
+   *  without re-traversing or relying on `.name`, which is frequently empty
+   *  on procedurally-exported meshes (confirmed: cargoPlane's own body mesh
+   *  has no name at all). Rebuilt on every goTo() -- a stale id from the
+   *  previous asset must never resolve to the new one's Object3D. */
+  buildNodeTree() {
+    this.nodeMap = new Map();
+    const nodes = [];
+    if (!this.currentRoot) return nodes;
+
+    const scratchBox = new Box3();
+    const scratchSize = new Vector3();
+    let nextId = 0;
+
+    const walk = (obj, depth) => {
+      const id = nextId;
+      nextId += 1;
+      this.nodeMap.set(id, obj);
+
+      let triangles = null;
+      let materialName = null;
+      let bbox = null;
+      if (obj.isMesh) {
+        const geometry = obj.geometry;
+        if (geometry) {
+          const count = geometry.index ? geometry.index.count : geometry.attributes.position.count;
+          triangles = Math.round(count / 3);
+        }
+        const material = Array.isArray(obj.material) ? obj.material[0] : obj.material;
+        materialName = material?.name || material?.type || null;
+        scratchBox.setFromObject(obj);
+        scratchBox.getSize(scratchSize);
+        bbox = { x: scratchSize.x, y: scratchSize.y, z: scratchSize.z };
+      }
+
+      nodes.push({
+        id,
+        name: obj.name || '(unnamed)',
+        type: obj.type,
+        isMesh: !!obj.isMesh,
+        visible: obj.visible,
+        depth,
+        triangles,
+        materialName,
+        bbox,
+        position: obj.position.toArray(),
+      });
+
+      obj.children.forEach((child) => walk(child, depth + 1));
+    };
+    walk(this.currentRoot, 0);
+
+    return nodes;
+  }
+
+  /** Toggles one node's `.visible` by the id buildNodeTree() assigned it --
+   *  the deterministic alternative to guessing from screenshots which mesh
+   *  a visual artifact belongs to. Three.js skips an invisible node's whole
+   *  subtree during render, so toggling a Group hides everything under it
+   *  too, same as toggling any individual mesh within it. */
+  toggleNode(nodeId) {
+    const obj = this.nodeMap.get(nodeId);
+    if (!obj) return;
+    obj.visible = !obj.visible;
+    const record = this.nodeTree.find((n) => n.id === nodeId);
+    if (record) record.visible = obj.visible;
+    this.emit('nodetree:change', this.nodeTree);
   }
 
   async goTo(index) {
@@ -295,6 +371,7 @@ export class AssetGallery extends EventEmitter {
 
     const frame = this.frameCameraToObject(root);
     const meshStats = this.computeMeshStats(root);
+    this.nodeTree = this.buildNodeTree();
     const fileSizeBytes = await fileSizePromise;
 
     this.currentStats = {
