@@ -933,8 +933,11 @@ function createFleet() {
 
 function createRouteLine() {
   // Continues from Sorting's own end point through Ground's region.
+  // Ground & Sorting Expansion Pass: matches SortingEnvironment.js's own
+  // createRouteLine() endpoint exactly -- that chapter's true floor edge
+  // (z=-206), not the previous arbitrary REGION_Z=-180 interior point.
   const curve = new CatmullRomCurve3([
-    new Vector3(0, 0.65, -180),
+    new Vector3(0, 0.65, -206),
     new Vector3(2, 0.4, -240),
     new Vector3(4, 0.1, -285),
     new Vector3(6, 0.05, REGION_Z),

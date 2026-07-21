@@ -66,10 +66,10 @@ const DIVERTER_PARCEL_LOCAL_INDEX = 0;
 const DIVERTER_PARCEL_COLOR = 0x2f5fae;
 // Matches Delivered/FinalMile's own parcel-label idiom.
 const DIVERTER_PARCEL_LABEL_COLOR = 0xeef2ff;
-// A junction past the belt's own midpoint (REGION_Z), so the diverted
-// parcel has real travel distance on the spur before it reaches endZ and
-// resets -- verified against createConveyors()'s own parcel z range
-// (REGION_Z +/- CONVEYOR_LENGTH/2).
+// Sits inside the belt's Pickup-facing half (createConveyors()'s parcels
+// now travel startZ=REGION_Z+CONVEYOR_LENGTH/2 -> endZ=REGION_Z-
+// CONVEYOR_LENGTH/2, i.e. toward Ground), leaving real travel distance on
+// the spur before the parcel reaches endZ and resets.
 const DIVERTER_Z = REGION_Z + 8;
 // How close (world Z) the target parcel needs to be to the junction before
 // the arm swings out / the parcel starts diverting -- reused as BOTH
@@ -166,11 +166,17 @@ function createConveyors() {
       const parcelInstanceMaterial = parcelMaterial.clone();
       varyMaterial(parcelInstanceMaterial, lineIndex * 4 + p);
       const parcel = new Mesh(new BoxGeometry(0.9, 0.6, 0.9), parcelInstanceMaterial);
-      const z = REGION_Z - CONVEYOR_LENGTH / 2 + p * (CONVEYOR_LENGTH / 4) + lineIndex * 3;
+      // Ground & Sorting Expansion Pass, Fix (Sorting flow direction):
+      // startZ/endZ previously ran Ground-facing -> Pickup-facing, so the
+      // belt visually moved cargo backward relative to the network's own
+      // Pickup -> Sorting -> Ground order. Flipped so parcels enter near
+      // Pickup (higher z) and exit toward Ground (lower z, see endZ),
+      // matching update()'s own now-reversed motion below.
+      const z = REGION_Z + CONVEYOR_LENGTH / 2 - p * (CONVEYOR_LENGTH / 4) - lineIndex * 3;
       parcel.position.set(x, 0.55, z);
       parcel.castShadow = true;
-      parcel.userData.startZ = REGION_Z - CONVEYOR_LENGTH / 2;
-      parcel.userData.endZ = REGION_Z + CONVEYOR_LENGTH / 2;
+      parcel.userData.startZ = REGION_Z + CONVEYOR_LENGTH / 2;
+      parcel.userData.endZ = REGION_Z - CONVEYOR_LENGTH / 2;
       parcel.userData.speed = PARCEL_SPEED;
       group.add(parcel);
       parcels.push(parcel);
@@ -208,8 +214,13 @@ function createDiverter() {
   const spurMaterial = new MeshStandardMaterial({ color: BELT_COLOR, roughness: 0.4, metalness: 0.5 });
   const spurLength = 5;
   const spur = new Mesh(new BoxGeometry(spurLength, 0.3, 2.2), spurMaterial);
-  spur.rotation.y = -Math.PI / 5;
-  spur.position.set(laneX + DIVERTER_OFFSET_X * 0.55, 0.15, DIVERTER_Z + 2.8);
+  // Ground & Sorting Expansion Pass, Fix (Sorting flow direction): mirrored
+  // across the junction (z-offset and rotation both flip sign) so the spur
+  // still reads as "continuing forward while sliding sideways" for a
+  // parcel now traveling toward decreasing z, instead of pointing back the
+  // way the parcel just came from.
+  spur.rotation.y = Math.PI / 5;
+  spur.position.set(laneX + DIVERTER_OFFSET_X * 0.55, 0.15, DIVERTER_Z - 2.8);
   spur.receiveShadow = true;
   group.add(spur);
 
@@ -252,11 +263,19 @@ function createRouteLine() {
   // Continues from Pickup's own end point (see PickupEnvironment.js) through
   // Sorting's region -- Section 23: the parcel rejoins the flow of the
   // conveyor line on arrival.
+  // Ground & Sorting Expansion Pass, Fix (Sorting route-line reach): the
+  // final point previously stopped at REGION_Z (-180), 26 units short of
+  // this chapter's own actual floor edge (createMezzanineFloor()'s
+  // BoxGeometry depth CONVEYOR_LENGTH+6, centered on REGION_Z -- half-depth
+  // (CONVEYOR_LENGTH+6)/2 = 26). Extended to that real edge so the glowing
+  // line spans the room it's actually in, not an arbitrary interior point
+  // -- GroundEnvironment.js's own route line start is updated to the same
+  // coordinate, keeping the two chapters' tubes joined exactly.
   const curve = new CatmullRomCurve3([
     new Vector3(4.5, 0.05, -84.5),
     new Vector3(2, 0.05, -130),
     new Vector3(0, 0.05, -155),
-    new Vector3(0, 0.65, REGION_Z),
+    new Vector3(0, 0.65, REGION_Z - (CONVEYOR_LENGTH + 6) / 2),
   ]);
   const material = new MeshBasicMaterial({ color: ELECTRIC_400, transparent: true, opacity: 0.85 });
   material.userData.baseOpacity = material.opacity;
@@ -372,13 +391,18 @@ export class SortingEnvironment {
     const deltaSeconds = time.delta / 1000;
     const velocityT = dampFactor(VELOCITY_HALF_LIFE_MS, time.delta);
     this.conveyors.userData.parcels.forEach((parcel) => {
-      const distanceToEnd = parcel.userData.endZ - parcel.position.z;
+      // Ground & Sorting Expansion Pass, Fix (Sorting flow direction):
+      // motion now runs toward decreasing z (Pickup-facing startZ toward
+      // Ground-facing endZ, see createConveyors()), the reverse of this
+      // chapter's original direction -- distanceToEnd, the wrap comparison,
+      // and the reset speed floor all flip to match.
+      const distanceToEnd = parcel.position.z - parcel.userData.endZ;
       const taper = Math.max(MIN_TAPER_FACTOR, Math.min(1, distanceToEnd / TAPER_DISTANCE));
       const desiredSpeed = PARCEL_SPEED * taper;
       parcel.userData.speed += (desiredSpeed - parcel.userData.speed) * velocityT;
 
-      parcel.position.z += parcel.userData.speed * deltaSeconds;
-      if (parcel.position.z > parcel.userData.endZ) {
+      parcel.position.z -= parcel.userData.speed * deltaSeconds;
+      if (parcel.position.z < parcel.userData.endZ) {
         parcel.position.z = parcel.userData.startZ;
         // Restarts at the same floor a decelerating parcel settles to, so
         // it accelerates back up from the belt's start rather than
@@ -402,7 +426,13 @@ export class SortingEnvironment {
     const diverterMotionT = dampFactor(DIVERTER_MOTION_HALF_LIFE_MS, time.delta);
     const distanceToJunction = this.diverterParcel.position.z - DIVERTER_Z;
     const armActive = Math.abs(distanceToJunction) < DIVERTER_TRIGGER_WINDOW;
-    if (distanceToJunction > -DIVERTER_TRIGGER_WINDOW) this.diverterParcel.userData.diverted = true;
+    // Ground & Sorting Expansion Pass, Fix (Sorting flow direction): the
+    // parcel now approaches the junction from the positive-distance side
+    // (higher z, decreasing toward it) instead of the negative side --
+    // latch flips to match, so "diverted" still arms exactly once
+    // entering the trigger window on the actual approach side, not the
+    // instant the parcel spawns.
+    if (distanceToJunction < DIVERTER_TRIGGER_WINDOW) this.diverterParcel.userData.diverted = true;
 
     this.diverterArmDeploy += ((armActive ? 1 : 0) - this.diverterArmDeploy) * diverterMotionT;
     this.diverter.userData.armPivot.rotation.y =
