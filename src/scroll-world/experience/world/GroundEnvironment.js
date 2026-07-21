@@ -1129,6 +1129,66 @@ function createYardSafety() {
   return group;
 }
 
+/** Ground Chapter Reconstruction Pass, Step 2: a small booth + a raised
+ *  barrier arm at the shared threshold (SPAWN_WAYPOINT_Z) -- this is where
+ *  the production spec's "Security Checkpoint" and "Exit Gate" would both
+ *  physically sit, since dock trucks arrive from and depart to this exact
+ *  point; one structure here covers both named steps rather than building
+ *  two redundant ones into a footprint this compact. Positioned along
+ *  this file's own established sightline (DOCK_CENTER_X/Z's own comment),
+ *  offset from the threshold's own paint stripes (createYardMarkings())
+ *  so the structure doesn't sit on top of the decals. Arm stays raised --
+ *  a visible structural marker, not yet gated to the dock cycle's own
+ *  arrival/departure timing; animating it is a natural follow-up. Reuses
+ *  createDockBuilding()'s own wall/roof material pattern and Sorting's
+ *  own diverter-arm pivot technique (SortingEnvironment.js) at this
+ *  file's scale. */
+function createCheckpoint() {
+  const group = new Group();
+  const boothMaterial = new MeshStandardMaterial({ color: HUB_COLOR, roughness: 0.6, metalness: 0.25 });
+  varyMaterial(boothMaterial, 700);
+  const roofMaterial = new MeshStandardMaterial({ color: 0x121316, roughness: 0.7, metalness: 0.15 });
+  const windowMaterial = new MeshBasicMaterial({ color: 0xbcd4ff, transparent: true, opacity: 0.75 });
+
+  const booth = new Mesh(new BoxGeometry(1.6, 2.2, 1.6), boothMaterial);
+  booth.position.set(-9, 1.1, SPAWN_WAYPOINT_Z - 3);
+  booth.castShadow = true;
+  booth.receiveShadow = true;
+  const boothRoof = new Mesh(new BoxGeometry(1.9, 0.2, 1.9), roofMaterial);
+  boothRoof.position.set(-9, 2.3, SPAWN_WAYPOINT_Z - 3);
+  const window = new Mesh(new BoxGeometry(1.2, 0.7, 0.06), windowMaterial);
+  window.position.set(-9, 1.4, SPAWN_WAYPOINT_Z - 3 + 0.81);
+  group.add(booth, boothRoof, window);
+
+  // Same small-radius PointLight-plus-glow-mesh precedent every other
+  // maneuvering/safety point in this chapter already uses.
+  const beacon = new Mesh(new SphereGeometry(0.1, 8, 8), new MeshBasicMaterial({ color: 0xffaa33 }));
+  beacon.position.set(-9, 2.5, SPAWN_WAYPOINT_Z - 3);
+  const beaconLight = new PointLight(0xffaa33, 1.2, 4, 2);
+  beaconLight.position.copy(beacon.position);
+  group.add(beacon, beaconLight);
+
+  // Barrier arm -- pivoted at the queue lane's own edge (QUEUE_LANE_X's
+  // truck-body half-width puts the lane edge around x=-6.6), raised
+  // (rotated vertical, clear of the lane) for this pass. A future
+  // "lowered" state would ease armPivot.rotation.z toward 0, sweeping the
+  // arm down across the lane -- same target-plus-damped-ease idiom as
+  // every other moving part in this file, not built yet.
+  const armMaterial = new MeshStandardMaterial({ color: OFFWHITE_100, roughness: 0.5, metalness: 0.2 });
+  const armPivot = new Group();
+  armPivot.position.set(-6.5, 0.9, SPAWN_WAYPOINT_Z - 3);
+  armPivot.rotation.z = Math.PI / 2;
+  const arm = new Mesh(new BoxGeometry(2.4, 0.1, 0.1), armMaterial);
+  arm.position.set(1.2, 0, 0);
+  arm.castShadow = true;
+  armPivot.add(arm);
+  const armPost = new Mesh(new CylinderGeometry(0.08, 0.08, 0.9, 8), boothMaterial);
+  armPost.position.set(-6.5, 0.45, SPAWN_WAYPOINT_Z - 3);
+  group.add(armPivot, armPost);
+
+  return group;
+}
+
 /**
  * The Container Port / Road Network (Production Handbook Section 23, Scene
  * 04) -- domestic scale and reach, a fleet in constant physical motion. Own
@@ -1205,7 +1265,7 @@ export class GroundEnvironment {
 
     // Ground Chapter Cinematic Realism Pass, Commit 2: static industrial
     // detail -- markings/safety props around the dock/yard built above.
-    this.group.add(createYardMarkings(), createYardSafety());
+    this.group.add(createYardMarkings(), createYardSafety(), createCheckpoint());
 
     // Ground Chapter Cinematic Realism Pass, Commit 3: the choreography
     // cycle's state (see update() for the full state machine). `dockTruck`/
