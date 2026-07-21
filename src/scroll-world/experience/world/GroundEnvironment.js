@@ -1,4 +1,5 @@
 import {
+  Box3,
   BoxGeometry,
   CapsuleGeometry,
   CylinderGeometry,
@@ -9,8 +10,10 @@ import {
   MeshStandardMaterial,
   PointLight,
   SphereGeometry,
+  Vector3,
 } from 'three';
 import { createLights } from './createLights.js';
+import { createParticles, updateParticles } from './createParticles.js';
 import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR, LIGHT_TINT_HALF_LIFE_MS } from '../utils/damp.js';
 import { LIGHT_TINTS } from '../camera/shots.js';
 import { varyMaterial } from './materialVariation.js';
@@ -523,6 +526,17 @@ const DOCK_TRUCK_WAYPOINT_Z = DOCK_CENTER_Z + 6;
 const QUEUE_WAYPOINT_Z = DOCK_CENTER_Z + 22;
 const SPAWN_WAYPOINT_Z = DOCK_CENTER_Z + 32;
 
+// Ground Chapter Full Rebuild, Step 7: the service vehicle's own two-
+// point trip -- proven mechanism from the vehicle-organization pass,
+// retargeted between the dock row's own container-stack area and the new
+// parking cluster (no Ground Office in this rebuild's scope).
+const SERVICE_POINT_A = { x: DOCK_CENTER_X + 9, z: DOCK_CENTER_Z + 4 };
+const SERVICE_POINT_B = { x: 4, z: -335 };
+const SERVICE_MOTION_HALF_LIFE_MS = 900;
+const SERVICE_ARRIVE_DISTANCE = 0.4;
+const SERVICE_HOLD_MS = 1800;
+const SERVICE_HEADING_HALF_LIFE_MS = 500;
+
 /** Sells "a queue," not just one waiting truck -- static dressing further
  *  back along the queue lane's own line, past where the live queued
  *  truck (wired in a later step) will sit. Same technique proven earlier
@@ -570,6 +584,139 @@ function createParkingCluster() {
     });
   });
   return trucks;
+}
+
+// Ground Chapter Full Rebuild, Step 7: the dock cycle -- arrive -> queue
+// -> dock-open -> unload -> dock-close -> depart -> gap -- reused
+// verbatim from the mechanism proven earlier this session (round-trip
+// through one shared threshold), not the one-way redesign evaluated and
+// declined for lack of any reference-footage justification. Phase
+// boundaries unchanged; only the physical waypoints (DOCK_LANE_X etc.,
+// defined in Step 5) were recalibrated for the new warehouse.
+const DOCK_CYCLE_MS = 24000;
+const PHASE_ARRIVE_END = 4000;
+const PHASE_QUEUE_END = 6000;
+const PHASE_DOCK_OPEN_END = 8000;
+const PHASE_UNLOAD_END = 16000;
+const PHASE_DOCK_CLOSE_END = 18000;
+const PHASE_DEPART_END = 22000;
+// PHASE_DEPART_END..DOCK_CYCLE_MS is the closing "gap" beat.
+const DOOR_CLOSED_Y = 2.4;
+const DOOR_OPEN_Y = 2.4 + 4.5;
+const DOCK_MOTION_HALF_LIFE_MS = 900;
+const PALLET_REVEAL_HALF_LIFE_MS = 350;
+const DEPART_REVERSE_DISTANCE = 8;
+const DEPART_TURN_HALF_LIFE_MS = 2200;
+const PALLET_SETTLE_HALF_LIFE_MS = 180;
+const PALLET_SETTLE_PERIOD_MS = 260;
+const PALLET_SETTLE_AMPLITUDE = 0.08;
+const FORKLIFT_TRIP_PERIOD_MS = [2600, 3100];
+const FORKLIFT_LIFT_HEIGHT = 0.6;
+const LOADOUT_WINDOW_START = PHASE_UNLOAD_END;
+const LOADOUT_WINDOW_END = PHASE_DEPART_END - 2000;
+const LOADOUT_MIDPOINT = LOADOUT_WINDOW_START + (LOADOUT_WINDOW_END - LOADOUT_WINDOW_START) * 0.5;
+const LOADOUT_FORKLIFT_INDEX = 0;
+const DOCK_LEAD_REFERENCE_DISTANCE = 16;
+const DOCK_LEAD_MAX_AMPLITUDE = 0.7;
+
+/** Zero-allocation phase lookup. */
+function phaseFor(cycleT) {
+  if (cycleT < PHASE_ARRIVE_END) return 'arrive';
+  if (cycleT < PHASE_QUEUE_END) return 'queue';
+  if (cycleT < PHASE_DOCK_OPEN_END) return 'dockOpen';
+  if (cycleT < PHASE_UNLOAD_END) return 'unload';
+  if (cycleT < PHASE_DOCK_CLOSE_END) return 'dockClose';
+  if (cycleT < PHASE_DEPART_END) return 'depart';
+  return 'gap';
+}
+
+/** The two choreographed dock-yard rigs, plus their own exhaust/dust
+ *  puffs -- Points inherit their parent's transform, so they follow the
+ *  truck through arrive/depart for free. */
+function createDockPair() {
+  const dockTruck = createTruck(0xd8dce2, 40, { livery: true });
+  dockTruck.position.set(DOCK_LANE_X, 0, DOCK_TRUCK_WAYPOINT_Z);
+  dockTruck.rotation.y = Math.PI;
+  dockTruck.userData.headingY = Math.PI;
+  dockTruck.userData.targetZ = dockTruck.position.z;
+
+  const queuedTruck = createTruck(0xc8ccd4, 41, { livery: true });
+  queuedTruck.position.set(QUEUE_LANE_X, 0, QUEUE_WAYPOINT_Z);
+  queuedTruck.rotation.y = Math.PI;
+  queuedTruck.userData.headingY = Math.PI;
+  queuedTruck.userData.targetZ = queuedTruck.position.z;
+
+  [dockTruck, queuedTruck].forEach((truck) => {
+    const exhaustPuff = createParticles({
+      count: 10,
+      spreadX: 0.4,
+      spreadZ: 0.4,
+      height: 1.4,
+      driftSpeed: 0.1,
+      color: 0x9aa0b5,
+      size: 0.04,
+      opacity: 0,
+      turbulence: 0.2,
+    });
+    exhaustPuff.position.set(1.3, 2.4, 4.4);
+    truck.add(exhaustPuff);
+    truck.userData.exhaustPuff = exhaustPuff;
+
+    const tireDust = createParticles({
+      count: 14,
+      spreadX: 1.6,
+      spreadZ: 1,
+      height: 0.4,
+      driftSpeed: 0.05,
+      color: 0xb3a184,
+      size: 0.05,
+      opacity: 0,
+      turbulence: 0.15,
+    });
+    tireDust.position.set(0, 0.2, -3);
+    truck.add(tireDust);
+    truck.userData.tireDust = tireDust;
+  });
+
+  return { dockTruck, queuedTruck };
+}
+
+/** Swaps a truck rig's procedural hull for the real deliveryVan GLB once
+ *  it loads -- recenter/flip/scale, the same three-nested-group technique
+ *  proven earlier this session. X/Z recenter on bbox center; Y anchors
+ *  the bbox's own MINIMUM to 0 so the model's wheels sit on the ground
+ *  plane instead of floating/buried. */
+const TRUCK_MODEL_ROTATION_Y = Math.PI;
+const TRUCK_TARGET_LENGTH = 10.25;
+function applyTruckModel(truckGroup, scene) {
+  const box = new Box3().setFromObject(scene);
+  const center = box.getCenter(new Vector3());
+
+  scene.position.x -= center.x;
+  scene.position.z -= center.z;
+  scene.position.y -= box.min.y;
+
+  const recenter = new Group();
+  recenter.add(scene);
+
+  const flip = new Group();
+  flip.rotation.y = TRUCK_MODEL_ROTATION_Y;
+  flip.add(recenter);
+
+  const size = box.getSize(new Vector3());
+  const scale = TRUCK_TARGET_LENGTH / size.z;
+  const container = new Group();
+  container.scale.setScalar(scale);
+  container.add(flip);
+
+  scene.traverse((child) => {
+    if (child.isMesh) child.castShadow = true;
+  });
+
+  truckGroup.userData.hullMeshes.forEach((mesh) => {
+    mesh.visible = false;
+  });
+  truckGroup.add(container);
 }
 
 /**
@@ -627,6 +774,45 @@ export class GroundEnvironment {
     // Ground Chapter Full Rebuild, Step 6: the parking cluster.
     this.parkingTrucks = createParkingCluster();
     this.parkingTrucks.forEach((truck) => this.group.add(truck));
+
+    // Ground Chapter Full Rebuild, Step 7: the dock cycle's two
+    // choreographed rigs, recycled from a small pool the same way the
+    // proven mechanism always has -- `dockTruck`/`queuedTruck` swap roles
+    // once per cycle rather than being instantiated fresh.
+    const dockPair = createDockPair();
+    this.dockTruck = dockPair.dockTruck;
+    this.queuedTruck = dockPair.queuedTruck;
+    this.group.add(this.dockTruck, this.queuedTruck);
+    this.dockCyclePhase = 'gap';
+
+    // Both dock-yard rigs get the real hull -- one load, two independent
+    // clones (a raw get() would share one Object3D between both rigs).
+    // The procedural rig renders immediately in the meantime.
+    this.experience.resources.load('deliveryVan').then(() => {
+      [this.dockTruck, this.queuedTruck].forEach((truck) => {
+        const clone = this.experience.resources.clone('deliveryVan');
+        if (!clone) return;
+        applyTruckModel(truck, clone.scene);
+      });
+    });
+
+    // Service vehicle -- same two-point-trip mechanism proven in the
+    // vehicle-organization pass, retargeted between the dock row and the
+    // new parking cluster (there's no Ground Office in this rebuild's
+    // scope -- the real reference footage never showed one).
+    this.serviceVehicle = createTruck(0x3a3e46, 60);
+    this.serviceVehicle.position.set(SERVICE_POINT_A.x, 0, SERVICE_POINT_A.z);
+    this.serviceVehicle.rotation.y = Math.PI / 2;
+    this.serviceVehicle.userData.targetPoint = 'B';
+    this.serviceVehicle.userData.holdTimer = 0;
+    this.serviceVehicle.userData.headingY = this.serviceVehicle.rotation.y;
+    const serviceBeacon = new Mesh(new SphereGeometry(0.1, 8, 8), new MeshBasicMaterial({ color: 0xffaa33 }));
+    serviceBeacon.position.set(0, 3.6, 0);
+    const serviceBeaconLight = new PointLight(0xffaa33, 0, 3.5, 2);
+    serviceBeaconLight.position.copy(serviceBeacon.position);
+    this.serviceVehicle.add(serviceBeacon, serviceBeaconLight);
+    this.serviceVehicle.userData.beaconLight = serviceBeaconLight;
+    this.group.add(this.serviceVehicle);
 
     // These two params are only this light's initial value -- shots.js's
     // LIGHT_TINTS.ground overrides both immediately below.
@@ -724,19 +910,6 @@ export class GroundEnvironment {
       truck.rotation.z = Math.sin(time.elapsed / 1750 + truckIndex * 2.3) * 0.012;
     });
 
-    // Ground Chapter Full Rebuild, Step 4: forklifts sit at their idle
-    // positions for now (the DROP/PICKUP cycle is coupled to the dock
-    // cycle's own 'unload' phase, wired in a later step) -- ambient mast
-    // sway and beacon rotation/blink only, so they don't read as frozen
-    // props next to the genuinely animated fleet.
-    this.forklifts.forEach((forklift, i) => {
-      const mast = forklift.userData.mast;
-      if (mast) mast.rotation.z = Math.sin(time.elapsed / 580 + i * 2.3) * 0.01;
-      forklift.userData.beacon.rotation.y = time.elapsed / 260 + i * 3;
-      const blink = Math.sin(time.elapsed / 340 + i * 5) > 0.6 ? 1 : 0.25;
-      forklift.userData.beaconLight.intensity = 1.6 * blink * this.activityWeight;
-    });
-
     // Ground Chapter Full Rebuild, Step 5: queue-dressing trucks never
     // move (no dock-cycle participation), but sitting perfectly rigid
     // next to genuinely animated vehicles reads as frozen -- same idle-
@@ -754,6 +927,218 @@ export class GroundEnvironment {
       truck.position.y = Math.sin(time.elapsed / 90 + i * 1.3) * 0.004;
       truck.rotation.z = Math.sin(time.elapsed / 1750 + i * 1.9) * 0.012;
     });
+
+    this.updateDockCycle(time);
+  }
+
+  /** Ground Chapter Full Rebuild, Step 7: the dock's single operational
+   *  cycle, reused verbatim from the mechanism proven earlier this
+   *  session -- every moving part here is a target-plus-damped-ease, no
+   *  per-frame allocation. */
+  updateDockCycle(time) {
+    const cycleT = time.elapsed % DOCK_CYCLE_MS;
+    const phase = phaseFor(cycleT);
+    const motionT = dampFactor(DOCK_MOTION_HALF_LIFE_MS, time.delta);
+    const phaseChanged = phase !== this.dockCyclePhase;
+
+    if (phaseChanged) {
+      if (phase === 'dockOpen' || phase === 'dockClose') this.dispatchGroundEvent('ground:dock-door');
+      if (phase === 'unload') this.dispatchGroundEvent('ground:forklift-move');
+      if (phase === 'dockClose') this.dispatchGroundEvent('ground:forklift-pause');
+      if (phase === 'gap') this.dispatchGroundEvent('ground:truck-idle');
+    }
+
+    // Role swap -- once, exactly on entering 'arrive'. By the time
+    // 'arrive' begins, the truck that was docked has already reached
+    // SPAWN under its old label; swapping here means it picks up the
+    // "ease toward QUEUE unless phase is gap" target under its new
+    // queuedTruck label, which is exactly the arriving motion.
+    if (phase === 'arrive' && phaseChanged) {
+      const previousDock = this.dockTruck;
+      this.dockTruck = this.queuedTruck;
+      this.queuedTruck = previousDock;
+    }
+    this.dockCyclePhase = phase;
+
+    this.queuedTruck.userData.targetZ = phase === 'gap' ? SPAWN_WAYPOINT_Z : QUEUE_WAYPOINT_Z;
+    this.dockTruck.userData.targetZ = phase === 'depart' || phase === 'gap' ? SPAWN_WAYPOINT_Z : DOCK_TRUCK_WAYPOINT_Z;
+    const dockTruckDeltaZ = this.dockTruck.userData.targetZ - this.dockTruck.position.z;
+    const queuedTruckDeltaZ = this.queuedTruck.userData.targetZ - this.queuedTruck.position.z;
+    this.dockTruck.position.z += dockTruckDeltaZ * motionT;
+    this.queuedTruck.position.z += queuedTruckDeltaZ * motionT;
+
+    // Lane discipline -- ease each rig's X toward whichever lane its
+    // CURRENT role implies.
+    this.dockTruck.position.x += (DOCK_LANE_X - this.dockTruck.position.x) * motionT;
+    this.queuedTruck.position.x += (QUEUE_LANE_X - this.queuedTruck.position.x) * motionT;
+
+    // Departure heading turn -- a departing truck backs out, then turns
+    // to face its real direction of travel once clear of the dock.
+    const turnT = dampFactor(DEPART_TURN_HALF_LIFE_MS, time.delta);
+    [this.dockTruck, this.queuedTruck].forEach((truck) => {
+      const isDeparting = truck.userData.targetZ === SPAWN_WAYPOINT_Z;
+      const clearOfDock = truck.position.z >= DOCK_TRUCK_WAYPOINT_Z + DEPART_REVERSE_DISTANCE;
+      truck.userData.headingY = isDeparting && clearOfDock ? 0 : Math.PI;
+      truck.rotation.y += (truck.userData.headingY - truck.rotation.y) * turnT;
+    });
+
+    const exhaustTargetOpacity = phase === 'arrive' || phase === 'depart' ? 0.22 : 0;
+    const dustTargetOpacity = exhaustTargetOpacity > 0 ? 0.18 : 0;
+    [this.dockTruck, this.queuedTruck].forEach((truck) => {
+      const puff = truck.userData.exhaustPuff;
+      puff.material.opacity += (exhaustTargetOpacity - puff.material.opacity) * motionT;
+      updateParticles(puff, time.delta / 1000, time.elapsed);
+
+      const dust = truck.userData.tireDust;
+      dust.material.opacity += (dustTargetOpacity - dust.material.opacity) * motionT;
+      updateParticles(dust, time.delta / 1000, time.elapsed);
+    });
+
+    rollWheels(this.dockTruck.userData.wheels, dockTruckDeltaZ * motionT, TRUCK_WHEEL_RADIUS);
+    rollWheels(this.queuedTruck.userData.wheels, queuedTruckDeltaZ * motionT, TRUCK_WHEEL_RADIUS);
+
+    this.dockTruck.rotation.z = Math.max(-0.03, Math.min(0.03, dockTruckDeltaZ * 0.01));
+    this.queuedTruck.rotation.z = Math.max(-0.03, Math.min(0.03, queuedTruckDeltaZ * 0.01));
+
+    [this.dockTruck, this.queuedTruck].forEach((truck) => {
+      const steerAngle = Math.max(-0.35, Math.min(0.35, truck.rotation.z * 8));
+      truck.userData.frontWheels.forEach((wheel) => {
+        wheel.rotation.y = steerAngle;
+      });
+    });
+
+    const indicatorBlink = Math.sin(time.elapsed / 200) > 0.2;
+    [this.dockTruck, this.queuedTruck].forEach((truck) => {
+      const [left, right] = truck.userData.indicators;
+      const active = indicatorBlink && Math.abs(truck.rotation.z) > 0.004;
+      left.visible = active && truck.rotation.z < 0;
+      right.visible = active && truck.rotation.z > 0;
+    });
+
+    // Dock door.
+    const doorTargetY = phase === 'dockOpen' || phase === 'unload' ? DOOR_OPEN_Y : DOOR_CLOSED_Y;
+    this.dockDoor.position.y += (doorTargetY - this.dockDoor.position.y) * motionT;
+    const doorMidMotion = Math.abs(doorTargetY - this.dockDoor.position.y) > 0.05;
+    this.dockDoorWarningLight.intensity = doorMidMotion && Math.sin(time.elapsed / 180) > 0 ? 1.4 : 0;
+
+    // Pallet stack: each pallet reveals at its own threshold within the
+    // unload window.
+    const unloadDuration = PHASE_UNLOAD_END - PHASE_DOCK_OPEN_END;
+    const isStacking = phase === 'unload' || phase === 'dockClose';
+    const palletT = dampFactor(PALLET_REVEAL_HALF_LIFE_MS, time.delta);
+    this.palletPool.forEach((pallet, i) => {
+      const revealAt = PHASE_DOCK_OPEN_END + (i / this.palletPool.length) * unloadDuration;
+      const targetScale = isStacking && cycleT >= revealAt ? 1 : 0;
+      const previousScale = pallet.scale.x;
+      const nextScale = previousScale + (targetScale - previousScale) * palletT;
+      pallet.scale.setScalar(nextScale);
+
+      if (targetScale === 1 && previousScale < 0.9 && nextScale >= 0.9 && !pallet.userData.settled) {
+        pallet.userData.settleElapsed = 0;
+        pallet.userData.settled = true;
+      }
+      if (targetScale === 0) pallet.userData.settled = false;
+
+      if (pallet.userData.settleElapsed !== undefined) {
+        pallet.userData.settleElapsed += time.delta;
+        const settleEnvelope = 2 ** (-pallet.userData.settleElapsed / PALLET_SETTLE_HALF_LIFE_MS);
+        if (settleEnvelope > 0.0005) {
+          const settleOscillation = Math.cos((pallet.userData.settleElapsed / PALLET_SETTLE_PERIOD_MS) * Math.PI * 2);
+          pallet.scale.setScalar(nextScale + settleEnvelope * settleOscillation * PALLET_SETTLE_AMPLITUDE);
+        } else {
+          pallet.userData.settleElapsed = undefined;
+        }
+      }
+    });
+
+    // Forklifts: active only during 'unload', ferrying between the dock
+    // truck and the pallet stack on their own staggered trip periods.
+    const unloadElapsed = cycleT - PHASE_DOCK_OPEN_END;
+    this.forklifts.forEach((forklift, i) => {
+      const idle = FORKLIFT_IDLE[i];
+      let targetX = idle.x;
+      let targetZ = idle.z;
+      let atDrop = false;
+      let loadoutCarrying = false;
+      const inLoadoutWindow =
+        i === LOADOUT_FORKLIFT_INDEX && cycleT >= LOADOUT_WINDOW_START && cycleT < LOADOUT_WINDOW_END;
+      if (phase === 'unload') {
+        const period = FORKLIFT_TRIP_PERIOD_MS[i];
+        const tripPhase = ((unloadElapsed + i * 900) % period) / period;
+        atDrop = tripPhase < 0.5;
+        targetX = atDrop ? FORKLIFT_DROP[i].x : FORKLIFT_PICKUP[i].x;
+        targetZ = atDrop ? FORKLIFT_DROP[i].z : FORKLIFT_PICKUP[i].z;
+      } else if (inLoadoutWindow) {
+        loadoutCarrying = cycleT >= LOADOUT_MIDPOINT;
+        targetX = loadoutCarrying ? FORKLIFT_PICKUP[i].x : FORKLIFT_DROP[i].x;
+        targetZ = loadoutCarrying ? FORKLIFT_PICKUP[i].z : FORKLIFT_DROP[i].z;
+      }
+      const dz = targetZ - forklift.position.z;
+      const dx = targetX - forklift.position.x;
+      forklift.position.x += dx * motionT;
+      forklift.position.z += dz * motionT;
+      forklift.rotation.x = Math.max(-0.15, Math.min(0.15, dz * 0.02));
+
+      rollWheels(forklift.userData.wheels, Math.hypot(dx, dz) * motionT, FORKLIFT_WHEEL_RADIUS);
+
+      const carrying = (phase === 'unload' && atDrop) || loadoutCarrying;
+      const forkGroup = forklift.userData.forkGroup;
+      const forkHeightTarget = carrying ? FORKLIFT_LIFT_HEIGHT : 0;
+      forkGroup.position.y += (forkHeightTarget - forkGroup.position.y) * motionT;
+      const cargoBox = forklift.userData.cargoBox;
+      if (cargoBox) {
+        const cargoTargetScale = carrying ? 1 : 0;
+        cargoBox.scale.setScalar(cargoBox.scale.x + (cargoTargetScale - cargoBox.scale.x) * motionT);
+      }
+
+      const mast = forklift.userData.mast;
+      if (mast) mast.rotation.z = Math.sin(time.elapsed / 580 + i * 2.3) * 0.01;
+
+      forklift.userData.beacon.rotation.y = time.elapsed / 260 + i * 3;
+      const blink = Math.sin(time.elapsed / 340 + i * 5) > 0.6 ? 1 : 0.25;
+      forklift.userData.beaconLight.intensity = 1.6 * blink * this.activityWeight;
+    });
+
+    // A small camera lead toward the dock truck's own direction of
+    // travel, magnitude scaled by how much of its current leg remains.
+    const leadMagnitude = Math.min(1, Math.abs(dockTruckDeltaZ) / DOCK_LEAD_REFERENCE_DISTANCE) * DOCK_LEAD_MAX_AMPLITUDE;
+    this.experience.camera.setTargetLead('ground', 0, 0, Math.sign(dockTruckDeltaZ) * leadMagnitude);
+
+    // Service vehicle -- real two-point trip, same mechanism proven in
+    // the vehicle-organization pass.
+    const serviceTarget = this.serviceVehicle.userData.targetPoint === 'B' ? SERVICE_POINT_B : SERVICE_POINT_A;
+    const serviceDx = serviceTarget.x - this.serviceVehicle.position.x;
+    const serviceDz = serviceTarget.z - this.serviceVehicle.position.z;
+    const serviceDistance = Math.hypot(serviceDx, serviceDz);
+
+    if (this.serviceVehicle.userData.holdTimer > 0) {
+      this.serviceVehicle.userData.holdTimer -= time.delta;
+      if (this.serviceVehicle.userData.holdTimer <= 0) {
+        this.serviceVehicle.userData.holdTimer = 0;
+        this.serviceVehicle.userData.targetPoint = this.serviceVehicle.userData.targetPoint === 'B' ? 'A' : 'B';
+        this.dispatchGroundEvent('ground:vehicle-reverse');
+      }
+    } else if (serviceDistance < SERVICE_ARRIVE_DISTANCE) {
+      this.serviceVehicle.userData.holdTimer = SERVICE_HOLD_MS;
+    } else {
+      const serviceMotionT = dampFactor(SERVICE_MOTION_HALF_LIFE_MS, time.delta);
+      const previousServiceX = this.serviceVehicle.position.x;
+      const previousServiceZ = this.serviceVehicle.position.z;
+      this.serviceVehicle.position.x += serviceDx * serviceMotionT;
+      this.serviceVehicle.position.z += serviceDz * serviceMotionT;
+      this.serviceVehicle.userData.headingY = Math.atan2(serviceDx, serviceDz);
+      rollWheels(
+        this.serviceVehicle.userData.wheels,
+        Math.hypot(this.serviceVehicle.position.x - previousServiceX, this.serviceVehicle.position.z - previousServiceZ),
+        TRUCK_WHEEL_RADIUS
+      );
+    }
+
+    const serviceHeadingT = dampFactor(SERVICE_HEADING_HALF_LIFE_MS, time.delta);
+    this.serviceVehicle.rotation.y += (this.serviceVehicle.userData.headingY - this.serviceVehicle.rotation.y) * serviceHeadingT;
+
+    const serviceBeaconBlink = Math.sin(time.elapsed / 260) > 0.55 ? 1 : 0.2;
+    this.serviceVehicle.userData.beaconLight.intensity = 1.4 * serviceBeaconBlink * this.activityWeight;
   }
 
   setActivity(state) {
