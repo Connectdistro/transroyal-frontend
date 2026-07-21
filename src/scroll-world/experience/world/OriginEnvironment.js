@@ -2,6 +2,7 @@ import { createFloor } from './createFloor.js';
 import { createRibs } from './createRibs.js';
 import { createWalkway } from './createWalkway.js';
 import { createRouteLines } from './createRouteLines.js';
+import { createOriginParcel } from './createOriginParcel.js';
 import { createParticles, updateParticles } from './createParticles.js';
 import { createLights } from './createLights.js';
 import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR, LIGHT_TINT_HALF_LIFE_MS } from '../utils/damp.js';
@@ -28,6 +29,7 @@ export class OriginEnvironment {
     this.ribs = createRibs();
     this.walkway = createWalkway();
     this.routeLines = createRouteLines();
+    this.parcel = createOriginParcel();
     // Cinematic Polish Phase, Commit 4: Origin is the one particle field
     // opted into the second turbulence layer -- the sparse, atmospheric
     // opening beat is where a touch of layered motion reads as ambience
@@ -73,6 +75,7 @@ export class OriginEnvironment {
       this.ribs,
       this.walkway,
       this.routeLines,
+      this.parcel,
       this.particles,
       this.keyLight,
       this.keyLight.target,
