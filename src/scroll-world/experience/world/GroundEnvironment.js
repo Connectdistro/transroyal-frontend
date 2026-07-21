@@ -538,6 +538,40 @@ function createQueueDressing() {
   return trucks;
 }
 
+// Ground Chapter Full Rebuild, Step 6: a distinct parking cluster --
+// separate from both the dock row and the queue lane, matching the real
+// reference footage's own separate parking area. Placed south of the
+// dock cluster (z -330/-340), inside the "far highway stretch" the very
+// first Ground layout audit this session identified as sparse/
+// underutilized space -- reorganizing existing footprint rather than
+// extending it, the same principle that's driven every Ground pass
+// since. Columns spaced 4 apart (clears each truck's own ~3.2-unit
+// track width); rows spaced 10 apart (clears the ~8-unit cargo length
+// plus margin) -- kept in the same nose-along-Z orientation every other
+// truck in this file uses, not perpendicular parking, so the spacing
+// math stays the same as everywhere else rather than needing a second
+// clearance formula for a rotated footprint. x range 0-8 keeps real
+// clearance from every highway lane (nearest is -15, 15+ units away).
+const PARKING_ROWS_Z = [-330, -340];
+const PARKING_COLS_X = [0, 4, 8];
+
+/** Static parked trailers -- same idle-motion-only technique as the
+ *  queue-dressing trucks, organized in two rows rather than the queue
+ *  lane's single file, reading as "parked," not "waiting in line." */
+function createParkingCluster() {
+  const trucks = [];
+  PARKING_ROWS_Z.forEach((z, rowIndex) => {
+    PARKING_COLS_X.forEach((x, colIndex) => {
+      const seed = 44 + rowIndex * 3 + colIndex;
+      const truck = createTruck(colIndex % 2 === 0 ? 0xd2d6dc : 0xc8ccd4, seed, { livery: false });
+      truck.position.set(x, 0, z);
+      truck.rotation.y = rowIndex % 2 === 0 ? 0 : Math.PI;
+      trucks.push(truck);
+    });
+  });
+  return trucks;
+}
+
 /**
  * The Container Port / Road Network (Production Handbook Section 23, Scene
  * 04). Own region of the continuous scene graph (Section 9: `REGION_Z`),
@@ -589,6 +623,10 @@ export class GroundEnvironment {
     // proven technique from the vehicle-organization pass.
     this.queueDressingTrucks = createQueueDressing();
     this.queueDressingTrucks.forEach((truck) => this.group.add(truck));
+
+    // Ground Chapter Full Rebuild, Step 6: the parking cluster.
+    this.parkingTrucks = createParkingCluster();
+    this.parkingTrucks.forEach((truck) => this.group.add(truck));
 
     // These two params are only this light's initial value -- shots.js's
     // LIGHT_TINTS.ground overrides both immediately below.
@@ -708,6 +746,13 @@ export class GroundEnvironment {
     this.queueDressingTrucks.forEach((truck, i) => {
       truck.position.y = Math.sin(time.elapsed / 90 + i * 1.7) * 0.004;
       truck.rotation.z = Math.sin(time.elapsed / 1750 + i * 2.3) * 0.012;
+    });
+
+    // Ground Chapter Full Rebuild, Step 6: parking cluster, same idle-
+    // motion-only treatment.
+    this.parkingTrucks.forEach((truck, i) => {
+      truck.position.y = Math.sin(time.elapsed / 90 + i * 1.3) * 0.004;
+      truck.rotation.z = Math.sin(time.elapsed / 1750 + i * 1.9) * 0.012;
     });
   }
 
