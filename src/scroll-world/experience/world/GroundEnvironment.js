@@ -579,7 +579,23 @@ function createDockYard() {
   curb.position.set(DOCK_CENTER_X + 2, 0.12, DOCK_CENTER_Z + 34);
   group.add(curb);
 
-  return { group, dockTruck, queuedTruck, palletPool };
+  // Ground Chapter Reconstruction Pass, Step 1: sells "a queue," not just
+  // one waiting truck -- two more createTruck() instances parked further
+  // back along the queue lane's own line (QUEUE_LANE_X), past the yard
+  // threshold (SPAWN_WAYPOINT_Z). Deliberately static set dressing (idle
+  // micro-motion only, driven in update() alongside the highway fleet's
+  // own) rather than full dock-cycle participants -- doesn't touch
+  // updateDockCycle() at all. Left procedural (no GLB swap) since these
+  // are background dressing, not the shot's own hero vehicles.
+  const queueDressingTrucks = [-258, -264].map((z, i) => {
+    const truck = createTruck(i === 0 ? 0xcfd3da : 0xc4c8d0, 42 + i, { livery: true });
+    truck.position.set(QUEUE_LANE_X, 0, z);
+    truck.rotation.y = Math.PI;
+    group.add(truck);
+    return truck;
+  });
+
+  return { group, dockTruck, queuedTruck, palletPool, queueDressingTrucks };
 }
 
 /** Two instances stage near the pallet pool. Amber beacon follows the same
@@ -1162,6 +1178,7 @@ export class GroundEnvironment {
     this.dockTruck = dockYard.dockTruck;
     this.queuedTruck = dockYard.queuedTruck;
     this.palletPool = dockYard.palletPool;
+    this.queueDressingTrucks = dockYard.queueDressingTrucks;
     this.group.add(dockYard.group);
 
     // Asset Integration Phase, Ground Chapter Commit 1: both dock-yard rigs
@@ -1409,6 +1426,17 @@ export class GroundEnvironment {
       // above and the braking pitch -- reads as a loaded truck settling
       // side-to-side at cruise, not synced to anything else in this file.
       truck.rotation.z = Math.sin(time.elapsed / 1750 + truckIndex * 2.3) * 0.012;
+    });
+
+    // Ground Chapter Reconstruction Pass, Step 1: the queue-dressing trucks
+    // never move (no dock-cycle participation), but sitting perfectly
+    // rigid next to genuinely animated vehicles would read as frozen --
+    // same idle-vibration bounce and body-roll formulas the highway fleet
+    // above already uses, just without the wrap-taper/braking terms that
+    // don't apply to a parked truck.
+    this.queueDressingTrucks.forEach((truck, i) => {
+      truck.position.y = Math.sin(time.elapsed / 90 + i * 1.7) * 0.004;
+      truck.rotation.z = Math.sin(time.elapsed / 1750 + i * 2.3) * 0.012;
     });
 
     const pulse = 1 - 0.2 + 0.2 * Math.sin((time.elapsed / 3800) * Math.PI * 2);
