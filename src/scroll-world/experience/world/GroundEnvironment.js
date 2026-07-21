@@ -209,11 +209,13 @@ const FORKLIFT_LIFT_HEIGHT = 0.6;
 // oscillated sideways with no destination (Math.sin(t/3300)*4, no target,
 // no purpose). Replaced with a real two-point trip between two landmarks
 // already in this chapter -- its own resting spot by the container stack,
-// and the loading ramp (a real "checks the loading area" destination) --
-// using the same target-plus-damped-ease + arrive-and-hold idiom the
-// forklifts already use for their own drop/pickup trips above.
+// and (Ground Chapter Reconstruction Pass, Step 4: retargeted from the
+// bare loading ramp to sit beside the new Ground Office instead, so this
+// already-built trip is what makes "small vehicles should naturally
+// travel to and from this building" true, without a new vehicle or a new
+// motion system) the Ground Office's own front door.
 const SERVICE_POINT_A = { x: DOCK_CENTER_X + 9, z: DOCK_CENTER_Z + 4 };
-const SERVICE_POINT_B = { x: DOCK_CENTER_X - 6, z: DOCK_CENTER_Z + 8 };
+const SERVICE_POINT_B = { x: DOCK_CENTER_X - 11.5, z: DOCK_CENTER_Z + 12 };
 const SERVICE_MOTION_HALF_LIFE_MS = 900;
 const SERVICE_ARRIVE_DISTANCE = 0.4;
 const SERVICE_HOLD_MS = 1800;
@@ -1216,6 +1218,50 @@ function createCheckpoint() {
   return group;
 }
 
+/** Ground Chapter Reconstruction Pass, Step 4: a small administrative
+ *  building -- the production spec's "Ground Office" -- on the dock
+ *  cluster's own west side, clear of the queue lane's own truck-body
+ *  footprint (QUEUE_LANE_X +/- 1.6) and the warehouse wing's own z-plane.
+ *  Same wall/roof/window construction createDockBuilding() already uses,
+ *  at a smaller scale befitting an office rather than a warehouse.
+ *  SERVICE_POINT_B (this file's own top-of-file constants) already points
+ *  the service vehicle's existing two-point trip at this building's own
+ *  front door -- no new vehicle, no new motion system, just a retargeted
+ *  destination. */
+function createGroundOffice() {
+  const group = new Group();
+  const wallMaterial = new MeshStandardMaterial({ color: HUB_COLOR, roughness: 0.65, metalness: 0.2 });
+  varyMaterial(wallMaterial, 800);
+  const roofMaterial = new MeshStandardMaterial({ color: 0x121316, roughness: 0.75, metalness: 0.1 });
+  const windowMaterial = new MeshBasicMaterial({ color: 0xbcd4ff, transparent: true, opacity: 0.75 });
+
+  const officeX = DOCK_CENTER_X - 14;
+  const officeZ = DOCK_CENTER_Z + 12;
+
+  const wall = new Mesh(new BoxGeometry(4, 3.4, 4), wallMaterial);
+  wall.position.set(officeX, 1.7, officeZ);
+  wall.castShadow = true;
+  wall.receiveShadow = true;
+  const roof = new Mesh(new BoxGeometry(4.4, 0.3, 4.4), roofMaterial);
+  roof.position.set(officeX, 3.55, officeZ);
+  group.add(wall, roof);
+
+  // Window on the east face -- toward SERVICE_POINT_B, where the service
+  // vehicle actually parks, so its own trip visibly arrives at a lit
+  // doorway rather than a blank wall.
+  const window = new Mesh(new BoxGeometry(0.06, 0.9, 1.6), windowMaterial);
+  window.position.set(officeX + 2.03, 1.9, officeZ);
+  group.add(window);
+
+  // Same small-radius PointLight practical precedent every other fixture
+  // in this chapter already uses.
+  const porchLight = new PointLight(0xffd9a0, 1, 5, 2);
+  porchLight.position.set(officeX + 2.1, 3, officeZ);
+  group.add(porchLight);
+
+  return group;
+}
+
 /**
  * The Container Port / Road Network (Production Handbook Section 23, Scene
  * 04) -- domestic scale and reach, a fleet in constant physical motion. Own
@@ -1292,7 +1338,7 @@ export class GroundEnvironment {
 
     // Ground Chapter Cinematic Realism Pass, Commit 2: static industrial
     // detail -- markings/safety props around the dock/yard built above.
-    this.group.add(createYardMarkings(), createYardSafety(), createCheckpoint());
+    this.group.add(createYardMarkings(), createYardSafety(), createCheckpoint(), createGroundOffice());
 
     // Ground Chapter Cinematic Realism Pass, Commit 3: the choreography
     // cycle's state (see update() for the full state machine). `dockTruck`/
