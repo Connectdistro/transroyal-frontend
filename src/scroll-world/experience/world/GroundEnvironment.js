@@ -1,4 +1,15 @@
-import { BoxGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, PointLight } from 'three';
+import {
+  BoxGeometry,
+  CapsuleGeometry,
+  CylinderGeometry,
+  Group,
+  Mesh,
+  MeshBasicMaterial,
+  MeshPhysicalMaterial,
+  MeshStandardMaterial,
+  PointLight,
+  SphereGeometry,
+} from 'three';
 import { createLights } from './createLights.js';
 import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR, LIGHT_TINT_HALF_LIFE_MS } from '../utils/damp.js';
 import { LIGHT_TINTS } from '../camera/shots.js';
@@ -346,6 +357,158 @@ function createWarehouse() {
   return { group, liveDoor, liveWarningLight, platforms, containers };
 }
 
+// Ground Chapter Full Rebuild, Step 4: forklift corridor + pallet staging,
+// positioned in the L's own interior corner (between Wing A's dock row and
+// Wing B), the natural staging space this angled shape creates. Two
+// forklift waypoint sets (not one shared pair) -- Logistics Choreography
+// Phase's own established fix for the near-collision a single shared
+// DROP/PICKUP pair caused last time this was built; offsetting from the
+// start avoids reintroducing it.
+const FORKLIFT_DROP = [
+  { x: DOCK_CENTER_X + 5, z: DOCK_CENTER_Z + 5 },
+  { x: DOCK_CENTER_X + 6.1, z: DOCK_CENTER_Z + 5 },
+];
+const FORKLIFT_PICKUP = [
+  { x: DOCK_CENTER_X, z: DOCK_CENTER_Z + 6 },
+  { x: DOCK_CENTER_X + 1.4, z: DOCK_CENTER_Z + 6 },
+];
+const FORKLIFT_IDLE = [
+  { x: DOCK_CENTER_X + 3, z: DOCK_CENTER_Z + 3 },
+  { x: DOCK_CENTER_X + 6, z: DOCK_CENTER_Z + 2 },
+];
+const FORKLIFT_WHEEL_RADIUS = 0.32;
+
+/** Two instances stage near the pallet pool. Amber beacon follows the same
+ *  small-radius practical-light precedent every other maneuvering vehicle
+ *  in this chapter already uses. */
+function createForklift(seed) {
+  const group = new Group();
+  const bodyMaterial = new MeshStandardMaterial({ color: 0xd88a1a, roughness: 0.45, metalness: 0.35 });
+  varyMaterial(bodyMaterial, seed);
+  const darkMaterial = new MeshStandardMaterial({ color: 0x14181f, roughness: 0.6, metalness: 0.4 });
+
+  const body = new Mesh(new BoxGeometry(1.2, 1, 2), bodyMaterial);
+  body.position.set(0, 0.7, 0);
+  body.castShadow = true;
+  const seat = new Mesh(new BoxGeometry(0.6, 0.5, 0.6), darkMaterial);
+  seat.position.set(0, 1.45, -0.5);
+  const mast = new Mesh(new BoxGeometry(0.15, 2.2, 0.15), darkMaterial);
+  mast.position.set(0, 1.3, 1.05);
+  group.add(body, seat, mast);
+
+  // The operator -- almost no chapter in this experience has visible
+  // human presence; this is the one place in Ground's own yard a person
+  // is already, structurally, standing.
+  const operatorClothingMaterial = new MeshStandardMaterial({ color: 0x2a2e36, roughness: 0.7, metalness: 0.1 });
+  const operatorSkinMaterial = new MeshStandardMaterial({ color: 0xc48a6a, roughness: 0.6, metalness: 0 });
+  varyMaterial(operatorClothingMaterial, seed + 10);
+  varyMaterial(operatorSkinMaterial, seed + 11);
+  const operatorBody = new Mesh(new CapsuleGeometry(0.22, 0.55, 4, 8), operatorClothingMaterial);
+  operatorBody.position.set(0, 1.95, -0.5);
+  operatorBody.castShadow = true;
+  const operatorHead = new Mesh(new SphereGeometry(0.14, 16, 16), operatorSkinMaterial);
+  operatorHead.position.set(0, 2.4, -0.5);
+  operatorHead.castShadow = true;
+  group.add(operatorBody, operatorHead);
+
+  const forkGeometry = new BoxGeometry(0.7, 0.08, 0.15);
+  const forkGroup = new Group();
+  [-0.25, 0.25].forEach((x) => {
+    const fork = new Mesh(forkGeometry, darkMaterial);
+    fork.rotation.y = Math.PI / 2;
+    fork.position.set(x, 0.25, 0.85);
+    forkGroup.add(fork);
+  });
+  group.add(forkGroup);
+
+  // A cargo box carried on the forks, visible only while loaded --
+  // CONTAINER_COLORS[0], the same blue this chapter's own hero shipment
+  // (and Pickup/Air's) already uses.
+  const cargoBox = new Mesh(
+    new BoxGeometry(0.8, 0.6, 0.8),
+    new MeshStandardMaterial({ color: CONTAINER_COLORS[0], roughness: 0.5, metalness: 0.2 })
+  );
+  cargoBox.position.set(0, 0.55, 0.85);
+  cargoBox.scale.setScalar(0);
+  forkGroup.add(cargoBox);
+  group.userData.cargoBox = cargoBox;
+
+  const wheelGeometry = new CylinderGeometry(0.32, 0.32, 0.3, 12);
+  const wheels = [];
+  [-0.9, 0.9].forEach((z) => {
+    [-0.55, 0.55].forEach((x) => {
+      const wheel = new Mesh(wheelGeometry, darkMaterial);
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(x, 0.32, z);
+      group.add(wheel);
+      wheels.push(wheel);
+    });
+  });
+  group.userData.wheels = wheels;
+
+  const beacon = new Mesh(new SphereGeometry(0.12, 8, 8), new MeshBasicMaterial({ color: 0xffaa33 }));
+  beacon.position.set(0, 2.0, -0.5);
+  const beaconLight = new PointLight(0xffaa33, 1.6, 4, 2);
+  beaconLight.position.copy(beacon.position);
+  group.add(beacon, beaconLight);
+
+  group.userData.forkGroup = forkGroup;
+  group.userData.mast = mast;
+  group.userData.beacon = beacon;
+  group.userData.beaconLight = beaconLight;
+  return group;
+}
+
+/** The pallet pool staged near FORKLIFT_DROP -- visibility/scale toggled
+ *  by a later choreography step, no geometry rebuild. */
+function createPalletStack() {
+  const group = new Group();
+  const palletBaseMaterial = new MeshStandardMaterial({ color: 0x5a4632, roughness: 0.85, metalness: 0 });
+  const cargoMaterial = new MeshStandardMaterial({ color: 0x1a2148, roughness: 0.5, metalness: 0.15 });
+  const palletPool = [];
+  const palletGrid = [
+    [0, 0],
+    [1.1, 0],
+    [0, 1.1],
+    [1.1, 1.1],
+    [0.55, 2.2],
+    [0.55, 3.25],
+  ];
+  palletGrid.forEach(([offsetX, offsetZ], i) => {
+    const pallet = new Group();
+    const base = new Mesh(new BoxGeometry(1, 0.15, 1), palletBaseMaterial.clone());
+    base.position.set(0, 0.075, 0);
+    const cargoMat = cargoMaterial.clone();
+    varyMaterial(cargoMat, 300 + i);
+    const cargoBox = new Mesh(new BoxGeometry(0.9, 0.8, 0.9), cargoMat);
+    cargoBox.position.set(0, 0.55, 0);
+    cargoBox.castShadow = true;
+    pallet.add(base, cargoBox);
+    pallet.position.set(FORKLIFT_DROP[0].x + offsetX - 0.55, 0, FORKLIFT_DROP[0].z + offsetZ - 1.6);
+    group.add(pallet);
+    palletPool.push(pallet);
+  });
+  return { group, palletPool };
+}
+
+/** Painted corridor lines marking the forklift path between the pallet
+ *  stack and the dock row as its own dedicated lane -- same flat-decal
+ *  idiom every other yard marking in this chapter already uses, not a new
+ *  visual language. */
+function createForkliftCorridorMarkings() {
+  const group = new Group();
+  const paintMaterial = new MeshBasicMaterial({ color: OFFWHITE_100, transparent: true, opacity: 0.35 });
+  const corridorStart = { x: FORKLIFT_PICKUP[0].x - 1.8, z: FORKLIFT_PICKUP[0].z - 0.5 };
+  const corridorEnd = { x: FORKLIFT_DROP[1].x + 1.8, z: FORKLIFT_DROP[1].z + 0.5 };
+  [-1, 1].forEach((side) => {
+    const line = new Mesh(new BoxGeometry(0.1, 0.02, 6.5), paintMaterial);
+    line.rotation.y = Math.PI / 5;
+    line.position.set((corridorStart.x + corridorEnd.x) / 2 + side * 2.2, 0.01, (corridorStart.z + corridorEnd.z) / 2);
+    group.add(line);
+  });
+  return group;
+}
+
 /**
  * The Container Port / Road Network (Production Handbook Section 23, Scene
  * 04). Own region of the continuous scene graph (Section 9: `REGION_Z`),
@@ -377,6 +540,21 @@ export class GroundEnvironment {
     this.dockPlatforms = warehouse.platforms;
     this.containers = warehouse.containers;
     this.group.add(warehouse.group);
+
+    // Ground Chapter Full Rebuild, Step 4: forklift corridor + pallet
+    // staging in the L's own interior corner. Forklifts sit at their idle
+    // positions with ambient motion only (mast sway, beacon) for now --
+    // the DROP/PICKUP cycle itself is coupled to the dock cycle's own
+    // 'unload' phase, wired alongside it in a later step.
+    const palletStack = createPalletStack();
+    this.palletPool = palletStack.palletPool;
+    this.group.add(palletStack.group, createForkliftCorridorMarkings());
+
+    this.forklifts = [createForklift(50), createForklift(51)];
+    this.forklifts.forEach((forklift, i) => {
+      forklift.position.set(FORKLIFT_IDLE[i].x, 0, FORKLIFT_IDLE[i].z);
+      this.group.add(forklift);
+    });
 
     // These two params are only this light's initial value -- shots.js's
     // LIGHT_TINTS.ground overrides both immediately below.
@@ -472,6 +650,19 @@ export class GroundEnvironment {
       truck.rotation.x = (1 - taper) * 0.05 * truck.userData.direction;
 
       truck.rotation.z = Math.sin(time.elapsed / 1750 + truckIndex * 2.3) * 0.012;
+    });
+
+    // Ground Chapter Full Rebuild, Step 4: forklifts sit at their idle
+    // positions for now (the DROP/PICKUP cycle is coupled to the dock
+    // cycle's own 'unload' phase, wired in a later step) -- ambient mast
+    // sway and beacon rotation/blink only, so they don't read as frozen
+    // props next to the genuinely animated fleet.
+    this.forklifts.forEach((forklift, i) => {
+      const mast = forklift.userData.mast;
+      if (mast) mast.rotation.z = Math.sin(time.elapsed / 580 + i * 2.3) * 0.01;
+      forklift.userData.beacon.rotation.y = time.elapsed / 260 + i * 3;
+      const blink = Math.sin(time.elapsed / 340 + i * 5) > 0.6 ? 1 : 0.25;
+      forklift.userData.beaconLight.intensity = 1.6 * blink * this.activityWeight;
     });
   }
 
