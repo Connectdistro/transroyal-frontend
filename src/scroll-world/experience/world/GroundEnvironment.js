@@ -205,6 +205,20 @@ const FORKLIFT_TRIP_PERIOD_MS = [2600, 3100];
 // y=1.45; forks start at local y=0.25, so 0.6 lift tops out around y=0.85).
 const FORKLIFT_LIFT_HEIGHT = 0.6;
 
+// Ground Vehicle Organization Pass: the service vehicle previously just
+// oscillated sideways with no destination (Math.sin(t/3300)*4, no target,
+// no purpose). Replaced with a real two-point trip between two landmarks
+// already in this chapter -- its own resting spot by the container stack,
+// and the loading ramp (a real "checks the loading area" destination) --
+// using the same target-plus-damped-ease + arrive-and-hold idiom the
+// forklifts already use for their own drop/pickup trips above.
+const SERVICE_POINT_A = { x: DOCK_CENTER_X + 9, z: DOCK_CENTER_Z + 4 };
+const SERVICE_POINT_B = { x: DOCK_CENTER_X - 6, z: DOCK_CENTER_Z + 8 };
+const SERVICE_MOTION_HALF_LIFE_MS = 900;
+const SERVICE_ARRIVE_DISTANCE = 0.4;
+const SERVICE_HOLD_MS = 1800;
+const SERVICE_HEADING_HALF_LIFE_MS = 500;
+
 // Choreography Refinement Pass, Track A3 Pass 1: the "coordination" decision
 // moment -- one forklift carries a pallet from the stack to the departing
 // truck, closing the one gap in an otherwise fully-choreographed dock cycle
@@ -434,6 +448,26 @@ function createYardSignage() {
     chevron.position.set(xCenter, 0, z);
     group.add(chevron);
   });
+
+  // Ground Vehicle Organization Pass: one more chevron at SPAWN_WAYPOINT_Z
+  // itself -- the dock/queued trucks' own literal entrance/exit threshold
+  // (this file's own "off-yard... reads as 'just entered the yard'"
+  // comment on that constant), centered between DOCK_LANE_X/QUEUE_LANE_X
+  // so it marks the one threshold both roles pass through. Reuses the
+  // exact chevron block above rather than a new checkpoint structure.
+  {
+    const chevron = new Group();
+    const bar = new BoxGeometry(1.6, 0.05, 0.35);
+    const left = new Mesh(bar, chevronMaterial);
+    left.rotation.y = Math.PI / 4;
+    left.position.set(-0.5, 0.03, 0);
+    const right = new Mesh(bar, chevronMaterial);
+    right.rotation.y = -Math.PI / 4;
+    right.position.set(0.5, 0.03, 0);
+    chevron.add(left, right);
+    chevron.position.set(-3, 0, SPAWN_WAYPOINT_Z);
+    group.add(chevron);
+  }
 
   const panel = new Mesh(new BoxGeometry(3, 1.2, 0.15), panelMaterial);
   const panelEdge = new Mesh(new BoxGeometry(3.2, 1.4, 0.08), panelEdgeMaterial);
@@ -985,6 +1019,18 @@ function createYardMarkings() {
     group.add(stripe);
   }
 
+  // Ground Vehicle Organization Pass: a second hazard-stripe row at
+  // SPAWN_WAYPOINT_Z, spanning the dock/queued trucks' own two lanes
+  // (DOCK_LANE_X/QUEUE_LANE_X) -- a real threshold marking at the yard's
+  // literal entrance/exit, reusing the exact stripe geometry/material
+  // above rather than a new checkpoint structure.
+  for (let i = 0; i < 8; i += 1) {
+    const stripe = new Mesh(new BoxGeometry(0.6, 0.02, 0.18), hazardMaterial);
+    stripe.rotation.y = Math.PI / 5;
+    stripe.position.set(-8 + i * 1.3, 0.01, SPAWN_WAYPOINT_Z);
+    group.add(stripe);
+  }
+
   // Wheel stops at each trailer position (dock truck + queued truck).
   const stopMaterial = new MeshStandardMaterial({ color: OFFWHITE_100, roughness: 0.7, metalness: 0 });
   [DOCK_CENTER_Z + 14 + 4.5, DOCK_CENTER_Z + 30 + 4.5].forEach((z) => {
@@ -1145,18 +1191,22 @@ export class GroundEnvironment {
     this.dockTruck.userData.targetZ = this.dockTruck.position.z;
     this.queuedTruck.userData.targetZ = this.queuedTruck.position.z;
 
-    // A third small vehicle for an independent reverse/return loop near the
-    // dock, deliberately never synced to the main cycle ("staggered
-    // timing"). Reuses createTruck() (the same rig the highway fleet and
-    // dock trucks already build) rather than a bespoke shape -- this
-    // chapter's existing vocabulary is already the right scale/silhouette
-    // for a yard service vehicle.
+    // A third small vehicle, deliberately never synced to the main dock
+    // cycle ("staggered timing"). Reuses createTruck() (the same rig the
+    // highway fleet and dock trucks already build) rather than a bespoke
+    // shape -- this chapter's existing vocabulary is already the right
+    // scale/silhouette for a yard service vehicle.
     // Kept a distinct dark graphite rather than the branded fleet's light
     // livery -- a yard utility vehicle, not part of the main fleet.
     this.serviceVehicle = createTruck(0x3a3e46, 60);
-    this.serviceVehicle.position.set(DOCK_CENTER_X + 9, 0, DOCK_CENTER_Z + 4);
+    this.serviceVehicle.position.set(SERVICE_POINT_A.x, 0, SERVICE_POINT_A.z);
     this.serviceVehicle.rotation.y = Math.PI / 2;
-    this.serviceVehicle.userData.baseX = this.serviceVehicle.position.x;
+    // Ground Vehicle Organization Pass: starts already heading to point B --
+    // 'A' is only ever re-armed once it actually arrives back at A (see
+    // update()), so this just names which leg it's on, not a timer phase.
+    this.serviceVehicle.userData.targetPoint = 'B';
+    this.serviceVehicle.userData.holdTimer = 0;
+    this.serviceVehicle.userData.headingY = this.serviceVehicle.rotation.y;
 
     // Track A3 Pass 2: every other yard vehicle that actually maneuvers
     // (both forklifts, the dock trucks via the door-motion warning light)
@@ -1629,26 +1679,49 @@ export class GroundEnvironment {
     const leadMagnitude = Math.min(1, Math.abs(dockTruckDeltaZ) / DOCK_LEAD_REFERENCE_DISTANCE) * DOCK_LEAD_MAX_AMPLITUDE;
     this.experience.camera.setTargetLead('ground', 0, 0, Math.sign(dockTruckDeltaZ) * leadMagnitude);
 
-    // Reversing service vehicle -- a short, continuous reverse/return loop
-    // on its own period, deliberately independent of the dock cycle above
-    // ("staggered timing," never one metronomic machine). The sign of the
-    // motion's own analytic derivative (cosine) flips exactly at each
-    // direction reversal -- comparing it frame to frame is cheaper and
-    // more direct than tracking a position delta.
-    const serviceDirection = Math.sign(Math.cos(time.elapsed / 3300));
-    if (serviceDirection !== 0 && serviceDirection !== this.serviceVehicle.userData.lastDirection) {
-      this.dispatchGroundEvent('ground:vehicle-reverse');
-    }
-    this.serviceVehicle.userData.lastDirection = serviceDirection;
-    const previousServiceX = this.serviceVehicle.position.x;
-    this.serviceVehicle.position.x = this.serviceVehicle.userData.baseX + Math.sin(time.elapsed / 3300) * 4;
+    // Ground Vehicle Organization Pass: a real two-point trip between
+    // SERVICE_POINT_A/B (see those constants' own comment) -- deliberately
+    // still independent of the dock cycle above ("staggered timing," never
+    // one metronomic machine), just no longer a destinationless oscillation.
+    // Target-plus-damped-ease on both x and z, the same shape this file's
+    // own dock/forklift motion already uses, plus a brief arrive-and-hold
+    // before reversing -- the same "arrive, pause, reverse" read the
+    // forklifts already have.
+    const serviceTarget = this.serviceVehicle.userData.targetPoint === 'B' ? SERVICE_POINT_B : SERVICE_POINT_A;
+    const serviceDx = serviceTarget.x - this.serviceVehicle.position.x;
+    const serviceDz = serviceTarget.z - this.serviceVehicle.position.z;
+    const serviceDistance = Math.hypot(serviceDx, serviceDz);
 
-    // Logistics Choreography Phase, Commit 1: this vehicle travels along X
-    // (unlike every other truck, which travels along Z), so its wheels'
-    // construction-time orientation doesn't literally match its direction
-    // of travel -- immaterial for a plain untextured cylinder with no
-    // tread to betray the mismatch, so the same helper still applies.
-    rollWheels(this.serviceVehicle.userData.wheels, this.serviceVehicle.position.x - previousServiceX, TRUCK_WHEEL_RADIUS);
+    if (this.serviceVehicle.userData.holdTimer > 0) {
+      this.serviceVehicle.userData.holdTimer -= time.delta;
+      if (this.serviceVehicle.userData.holdTimer <= 0) {
+        this.serviceVehicle.userData.holdTimer = 0;
+        this.serviceVehicle.userData.targetPoint = this.serviceVehicle.userData.targetPoint === 'B' ? 'A' : 'B';
+        this.dispatchGroundEvent('ground:vehicle-reverse');
+      }
+    } else if (serviceDistance < SERVICE_ARRIVE_DISTANCE) {
+      this.serviceVehicle.userData.holdTimer = SERVICE_HOLD_MS;
+    } else {
+      const serviceMotionT = dampFactor(SERVICE_MOTION_HALF_LIFE_MS, time.delta);
+      const previousServiceX = this.serviceVehicle.position.x;
+      const previousServiceZ = this.serviceVehicle.position.z;
+      this.serviceVehicle.position.x += serviceDx * serviceMotionT;
+      this.serviceVehicle.position.z += serviceDz * serviceMotionT;
+
+      // Faces its actual direction of travel each leg -- the same idiom
+      // the dock/queued trucks' own departure-heading-turn already
+      // established (Ground & Sorting Choreography Fixes, Fix 3).
+      this.serviceVehicle.userData.headingY = Math.atan2(serviceDx, serviceDz);
+
+      rollWheels(
+        this.serviceVehicle.userData.wheels,
+        Math.hypot(this.serviceVehicle.position.x - previousServiceX, this.serviceVehicle.position.z - previousServiceZ),
+        TRUCK_WHEEL_RADIUS
+      );
+    }
+
+    const serviceHeadingT = dampFactor(SERVICE_HEADING_HALF_LIFE_MS, time.delta);
+    this.serviceVehicle.rotation.y += (this.serviceVehicle.userData.headingY - this.serviceVehicle.rotation.y) * serviceHeadingT;
 
     // Track A3 Pass 2: a distinct blink period from every other beacon in
     // this chapter (forklifts blink on 340ms, the dock door warning on
