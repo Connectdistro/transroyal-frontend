@@ -1,4 +1,4 @@
-import { BoxGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial } from 'three';
+import { BoxGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, PointLight } from 'three';
 import { createLights } from './createLights.js';
 import { dampFactor, ACTIVITY_HALF_LIFE_MS, DEFAULT_ACTIVITY_FLOOR, LIGHT_TINT_HALF_LIFE_MS } from '../utils/damp.js';
 import { LIGHT_TINTS } from '../camera/shots.js';
@@ -25,11 +25,13 @@ const ASPHALT_COLOR = 0x232428;
 const HUB_COLOR = 0x565b66;
 const RUBBER_COLOR = 0x05070f;
 const HIGHWAY_LENGTH = 100;
-// Ground Chapter Full Rebuild, Step 2: same lane-clearance values verified
-// live last pass (margin against a dock-cluster footprint of similar
-// scale) -- re-checked once the new angled warehouse (Step 3) actually
-// exists, not assumed to still be correct blind.
-const LANE_X = [-19, -11, 17.5, 22.5];
+// Ground Chapter Full Rebuild, Step 3 fix: re-checked live against the
+// new angled warehouse's own MEASURED bounds (world x -10.2 to 22.4,
+// read via a per-mesh traversal, not estimated) -- the original Step 2
+// values (carried over from the old, smaller footprint) overlapped 3 of
+// 4 lanes once actually checked. Widened west/east spread with real
+// clearance margin on both sides.
+const LANE_X = [-19, -15, 23, 29];
 const FLEET_SPEED = 6.5;
 const VELOCITY_HALF_LIFE_MS = 300;
 const WRAP_TAPER_DISTANCE = HIGHWAY_LENGTH * 0.12;
@@ -141,8 +143,11 @@ function createHighway() {
   const group = new Group();
   const asphaltMaterial = new MeshPhysicalMaterial({ color: ASPHALT_COLOR, metalness: 0.1, roughness: 0.9, clearcoat: 0 });
   varyMaterial(asphaltMaterial, 600);
-  const asphalt = new Mesh(new BoxGeometry(48, 0.3, HIGHWAY_LENGTH), asphaltMaterial);
-  asphalt.position.set(0, -0.15, REGION_Z);
+  // Widened from 48 (centered x=0) to actually cover LANE_X's own new
+  // east lane (29, truck body out to 30.6) with real margin, since the
+  // wider warehouse pushed that lane further out this step.
+  const asphalt = new Mesh(new BoxGeometry(60, 0.3, HIGHWAY_LENGTH), asphaltMaterial);
+  asphalt.position.set(4, -0.15, REGION_Z);
   asphalt.receiveShadow = true;
   group.add(asphalt);
 
@@ -204,6 +209,143 @@ function createHubSilhouettes() {
   return group;
 }
 
+// Ground Chapter Full Rebuild, Step 3: same sightline-tuned anchor point
+// this chapter has used all session (DOCK_CENTER_X/Z) -- the camera itself
+// hasn't changed, so the composition math that already worked still
+// applies to the new, larger structure built against it.
+const DOCK_CENTER_X = 2;
+const DOCK_CENTER_Z = -310;
+const CONTAINER_COLORS = [0x2f5fae, 0x8a3a2a, 0x3a6b4a];
+
+/** Ground Chapter Full Rebuild, Step 3: an angled, two-wing warehouse --
+ *  the defining shape in the real reference footage (reference/ground/
+ *  ground reference.mp4), replacing the old single-facade-plus-small-bay-
+ *  wing massing. Wing A runs east-west; Wing B meets it at Wing A's own
+ *  east end and runs north-south into the yard, forming an L whose
+ *  concave corner faces the operational cluster -- the same "roofline
+ *  distinct from the main block" convention this chapter already used
+ *  (Wing B's roof sits lower than Wing A's) carries over to the new
+ *  shape. A dense dock row lines Wing A's own inner face (the reference's
+ *  own defining read: many bays, tightly spaced, not one or two), with
+ *  two more static bays along Wing B's own inner face continuing the
+ *  row around the corner. Only one bay (the center of Wing A's row)
+ *  returns a live door/platform pair for later choreography wiring --
+ *  matching "two or three well-choreographed trucks, not ten vehicles"
+ *  from this session's own established scoping instinct, the rest are
+ *  static dressing (closed doors, no animation), the same technique
+ *  already proven for queue-dressing trucks. */
+function createWarehouse() {
+  const group = new Group();
+  const wallMaterial = new MeshStandardMaterial({ color: HUB_COLOR, roughness: 0.7, metalness: 0.2 });
+  varyMaterial(wallMaterial, 101);
+  const roofMaterial = new MeshStandardMaterial({ color: 0x121316, roughness: 0.8, metalness: 0.1 });
+  const backdropMaterial = new MeshBasicMaterial({ color: 0x0a0a0c });
+  const doorMaterial = new MeshStandardMaterial({ color: 0x121316, roughness: 0.5, metalness: 0.3 });
+  const platformMaterial = new MeshPhysicalMaterial({ color: ASPHALT_COLOR, roughness: 0.85, metalness: 0.1, clearcoat: 0 });
+
+  // Wing A -- the long east-west face, widened from the old single 14-unit
+  // wall to 24 units to actually hold a dense dock row.
+  const wingA = new Mesh(new BoxGeometry(24, 9, 1), wallMaterial);
+  wingA.position.set(0, 4.5, 0);
+  wingA.castShadow = true;
+  wingA.receiveShadow = true;
+  const wingARoof = new Mesh(new BoxGeometry(24.4, 0.4, 1.4), roofMaterial);
+  wingARoof.position.set(0, 9.2, 0);
+  group.add(wingA, wingARoof);
+
+  // Wing B -- meets Wing A at its own east end (x=12), extends south into
+  // the yard. Distinctly lower roofline than Wing A's own 9-unit height.
+  const wingB = new Mesh(new BoxGeometry(1, 7, 16), wallMaterial);
+  wingB.position.set(12, 3.5, 8);
+  wingB.castShadow = true;
+  wingB.receiveShadow = true;
+  const wingBRoof = new Mesh(new BoxGeometry(1.4, 0.4, 16.4), roofMaterial);
+  wingBRoof.position.set(12, 7.2, 8);
+  group.add(wingB, wingBRoof);
+
+  // Canopy over Wing A's own dock row, same "cheapest believable roll-up
+  // door" idiom this chapter already used -- the door mesh itself slides
+  // up in a later step to reveal the dark backdrop behind it.
+  const canopy = new Mesh(new BoxGeometry(24, 0.3, 5), roofMaterial);
+  canopy.position.set(0, 6.5, 3);
+  group.add(canopy);
+
+  let liveDoor = null;
+  let liveWarningLight = null;
+  const platforms = [];
+
+  // Dense dock row along Wing A's inner (+z) face -- 5 bays, evenly
+  // spaced, matching the reference footage's own dense-row read. Only
+  // the center bay (i===2) gets the live door/platform pair a later step
+  // wires choreography onto; the rest are static closed doors.
+  [-10, -5, 0, 5, 10].forEach((x, i) => {
+    const isLive = i === 2;
+    const doorBackdrop = new Mesh(new BoxGeometry(3, 4.5, 0.3), backdropMaterial);
+    doorBackdrop.position.set(x, 2.4, 1);
+    const door = new Mesh(new BoxGeometry(3, 4.5, 0.2), doorMaterial);
+    door.position.set(x, 2.4, 1.2);
+    group.add(doorBackdrop, door);
+
+    const platform = new Mesh(new BoxGeometry(2.6, 1, 1.8), platformMaterial);
+    platform.position.set(x, 0.5, 2.2);
+    platform.receiveShadow = true;
+    group.add(platform);
+
+    if (isLive) {
+      liveDoor = door;
+      const warningLight = new PointLight(0xffaa33, 0, 3, 2);
+      warningLight.position.set(x, 5.3, 1.3);
+      group.add(warningLight);
+      liveWarningLight = warningLight;
+    } else {
+      platforms.push(platform);
+    }
+  });
+
+  // Two more static bays continuing the row around the corner along Wing
+  // B's own inner (-x) face.
+  [4, 11].forEach((z) => {
+    const doorBackdrop = new Mesh(new BoxGeometry(0.3, 4, 2.6), backdropMaterial);
+    doorBackdrop.position.set(11, 2.2, z);
+    const door = new Mesh(new BoxGeometry(0.2, 4, 2.6), doorMaterial);
+    door.position.set(10.8, 2.2, z);
+    group.add(doorBackdrop, door);
+
+    const platform = new Mesh(new BoxGeometry(1.8, 1, 2.6), platformMaterial);
+    platform.position.set(9.7, 0.5, z);
+    platform.receiveShadow = true;
+    group.add(platform);
+    platforms.push(platform);
+  });
+
+  // Stacked containers -- background-of-midground depth beyond Wing B's
+  // own outer corner, distinctly colored so the stack itself reads as
+  // varied.
+  // Ground Chapter Full Rebuild, Step 3 fix: tucked closer to Wing B (was
+  // x=16/16/19.2, measured live to extend to world x=22.4 -- overlapped 3
+  // of 4 highway lanes once actually checked, not assumed clear from the
+  // design sketch alone) so the highway lanes need less clearance.
+  const containerGeometry = new BoxGeometry(2.4, 2.6, 6);
+  const containerSpecs = [
+    [13.5, 1.3, 4, 0],
+    [13.5, 3.95, 4, 1],
+    [16, 1.3, 6.5, 2],
+  ];
+  const containers = containerSpecs.map(([x, y, z, seed]) => {
+    const material = new MeshStandardMaterial({ color: CONTAINER_COLORS[seed % CONTAINER_COLORS.length], roughness: 0.55, metalness: 0.35 });
+    varyMaterial(material, 200 + seed);
+    const container = new Mesh(containerGeometry, material);
+    container.position.set(x, y, z);
+    container.castShadow = true;
+    container.receiveShadow = true;
+    group.add(container);
+    return container;
+  });
+
+  group.position.set(DOCK_CENTER_X, 0, DOCK_CENTER_Z);
+  return { group, liveDoor, liveWarningLight, platforms, containers };
+}
+
 /**
  * The Container Port / Road Network (Production Handbook Section 23, Scene
  * 04). Own region of the continuous scene graph (Section 9: `REGION_Z`),
@@ -223,6 +365,18 @@ export class GroundEnvironment {
     // against it.
     this.fleet = createFleet();
     this.group.add(createHighway(), createHubSilhouettes(), this.fleet);
+
+    // Ground Chapter Full Rebuild, Step 3: the angled two-wing warehouse +
+    // dense dock row -- the defining shape from the real reference
+    // footage. liveDoor/liveWarningLight/platforms/containers are exposed
+    // for a later choreography-wiring step; this step only builds and
+    // places the structure.
+    const warehouse = createWarehouse();
+    this.dockDoor = warehouse.liveDoor;
+    this.dockDoorWarningLight = warehouse.liveWarningLight;
+    this.dockPlatforms = warehouse.platforms;
+    this.containers = warehouse.containers;
+    this.group.add(warehouse.group);
 
     // These two params are only this light's initial value -- shots.js's
     // LIGHT_TINTS.ground overrides both immediately below.
