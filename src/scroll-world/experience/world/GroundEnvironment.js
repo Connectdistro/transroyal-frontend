@@ -294,6 +294,33 @@ function createDockBuilding() {
   mainRoof.position.set(0, 9.2, 0);
   group.add(mainWall, mainRoof);
 
+  // Ground Chapter Reconstruction Pass, Step 3: extends the building's own
+  // massing west of mainWall to read as "part of a larger warehouse," not
+  // just the loading-dock module the spec calls "Warehouse Face" out as
+  // its own zone. Same wall/roof material pattern, a distinct (shorter)
+  // roofline than mainWall's own 9-unit height -- the same "roofline
+  // distinct from the main block" convention bayWing below already
+  // established. Clear of every other prop in this file (checkpoint,
+  // fence, signage all sit at very different z-depths).
+  const warehouseWing = new Mesh(new BoxGeometry(10, 7, 1), wallMaterial);
+  warehouseWing.position.set(-12, 3.5, 0);
+  warehouseWing.castShadow = true;
+  warehouseWing.receiveShadow = true;
+  const warehouseRoof = new Mesh(new BoxGeometry(10.4, 0.4, 1.4), roofMaterial);
+  warehouseRoof.position.set(-12, 7.2, 0);
+  group.add(warehouseWing, warehouseRoof);
+
+  // A facade needs to read as a facade, not a blank wall -- same window-
+  // strip material createDockLighting() already uses for this building's
+  // own front, added inline here since these belong to the wing's own
+  // geometry rather than that file's lighting-fixture pass.
+  const wingWindowMaterial = new MeshBasicMaterial({ color: 0xbcd4ff, transparent: true, opacity: 0.7 });
+  [-14.5, -9.5].forEach((x) => {
+    const win = new Mesh(new BoxGeometry(1.4, 0.6, 0.08), wingWindowMaterial);
+    win.position.set(x, 4.2, 0.55);
+    group.add(win);
+  });
+
   // Loading-bay wing -- a distinctly lower massing than the main roofline
   // (Addendum-style "roofline distinct from the main block"), extending
   // toward the yard so the dock door reads as its own volume.
