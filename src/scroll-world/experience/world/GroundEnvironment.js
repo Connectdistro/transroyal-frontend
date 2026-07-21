@@ -1083,16 +1083,23 @@ function createYardSafety() {
   }
 
   // Low security fencing along the yard's far edge (background band).
+  // Ground Vehicle Organization Pass, choreography re-audit: post 0
+  // previously sat at x=-12, z=-328 -- inside the new LANE_X[1]=-11's own
+  // truck-body footprint (-12.6 to -9.4, from the earlier lane
+  // redistribution), a real overlap left over from that fix since the
+  // fence wasn't re-checked against it at the time. Shifted the whole run
+  // 4 units west (posts + rail together, keeping the rail's own exact
+  // span between them) to clear it with real margin.
   const postGeometry = new CylinderGeometry(0.08, 0.08, 1.1, 8);
   const railGeometry = new BoxGeometry(18, 0.06, 0.06);
   for (let i = 0; i < 2; i += 1) {
     const post = new Mesh(postGeometry, fenceMaterial);
-    post.position.set(DOCK_CENTER_X - 14 + i * 18, 0.55, DOCK_CENTER_Z - 18);
+    post.position.set(DOCK_CENTER_X - 18 + i * 18, 0.55, DOCK_CENTER_Z - 18);
     group.add(post);
   }
   [0.4, 0.9].forEach((y) => {
     const rail = new Mesh(railGeometry, fenceMaterial);
-    rail.position.set(DOCK_CENTER_X - 5, y, DOCK_CENTER_Z - 18);
+    rail.position.set(DOCK_CENTER_X - 9, y, DOCK_CENTER_Z - 18);
     group.add(rail);
   });
 
