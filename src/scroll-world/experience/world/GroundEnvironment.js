@@ -36,7 +36,19 @@ const OFFWHITE_100 = 0xeef2ff;
 // inside Sorting's floor geometry.
 const REGION_Z = -330;
 const HIGHWAY_LENGTH = 100;
-const LANE_X = [-16, -5.5, 6, 17];
+// Ground & Sorting Expansion Pass, Fix B: the original two middle lanes
+// (-5.5, 6) geometrically overlapped the dock building/container stack's
+// own combined footprint (roughly x -5.5 to 12.4, confirmed live -- a
+// fleet truck ended up parked directly inside the dock canopy). The
+// fleet loops through this chapter's ENTIRE z-range every lap
+// (createFleet()'s trucks never stop or detour around the yard), so any
+// lane whose x falls inside that footprint periodically collides with it.
+// Redistributed to clear it with real margin on both sides (west lane
+// pushed out to -19/-11, east lanes to 17.5/22.5) rather than nudging just
+// one lane into the narrow gap next to its own neighbor. Outer lane 0
+// keeps roughly its original spirit (was -16, now -19 -- still the
+// leftmost/outermost lane, just shifted to make room for lane 1's move).
+const LANE_X = [-19, -11, 17.5, 22.5];
 const FLEET_SPEED = 6.5;
 
 // Cinematic Polish Phase, Commit 4: "accelerate -> move -> settle," never an
@@ -402,6 +414,27 @@ function createYardSignage() {
     group.add(chevron);
   });
 
+  // Ground & Sorting Expansion Pass, Fix A: two more chevrons inside the
+  // transition apron itself (see TRANSITION_APRON_NEAR_Z/FAR_Z) -- the
+  // first wayfinding mark a viewer reaches after Sorting, not a dock-area
+  // fixture, so positioned along this file's own established sightline
+  // formula (DOCK_CENTER_X/Z's own comment: xCenter = -26 + ((z+225) /
+  // -115) * 38) rather than a DOCK_CENTER offset.
+  [-235, -258].forEach((z) => {
+    const chevron = new Group();
+    const bar = new BoxGeometry(1.6, 0.05, 0.35);
+    const left = new Mesh(bar, chevronMaterial);
+    left.rotation.y = Math.PI / 4;
+    left.position.set(-0.5, 0.03, 0);
+    const right = new Mesh(bar, chevronMaterial);
+    right.rotation.y = -Math.PI / 4;
+    right.position.set(0.5, 0.03, 0);
+    chevron.add(left, right);
+    const xCenter = -26 + ((z + 225) / -115) * 38;
+    chevron.position.set(xCenter, 0, z);
+    group.add(chevron);
+  });
+
   const panel = new Mesh(new BoxGeometry(3, 1.2, 0.15), panelMaterial);
   const panelEdge = new Mesh(new BoxGeometry(3.2, 1.4, 0.08), panelEdgeMaterial);
   panel.position.set(DOCK_CENTER_X + 4, 6.5, DOCK_CENTER_Z + 0.65);
@@ -603,6 +636,17 @@ function createForklift(seed) {
   return group;
 }
 
+// Ground & Sorting Expansion Pass, Fix A: SortingEnvironment.js's own
+// mezzanine floor ends at z=-206 (its BoxGeometry is centered on its own
+// REGION_Z=-180 with a 52-unit length); this file's own highway asphalt
+// (createHighway(), below) begins at z=-280. A Ground-chapter audit
+// confirmed genuinely empty world space in between -- not even asphalt --
+// the one concrete, numerically-justified transition-legibility gap this
+// pass targets (everything else proposed in that same audit -- new zones,
+// a restructured layout -- was explicitly not supported by the numbers).
+const TRANSITION_APRON_NEAR_Z = -206;
+const TRANSITION_APRON_FAR_Z = -280;
+
 function createHighway() {
   const group = new Group();
   const asphaltMaterial = new MeshPhysicalMaterial({ color: ASPHALT_COLOR, metalness: 0.1, roughness: 0.9, clearcoat: 0 });
@@ -628,6 +672,23 @@ function createHighway() {
   });
 
   return group;
+}
+
+/** Ground & Sorting Expansion Pass, Fix A: a static floor connector across
+ *  the gap documented above (TRANSITION_APRON_NEAR_Z/FAR_Z) -- deliberately
+ *  its own mesh, not folded into createHighway()/HIGHWAY_LENGTH, so the
+ *  fleet's own wrap boundaries and timing stay untouched. Same asphalt
+ *  material treatment as the highway itself, so it reads as one continuous
+ *  paved surface arriving from Sorting rather than a new patch of ground. */
+function createTransitionApron() {
+  const length = TRANSITION_APRON_NEAR_Z - TRANSITION_APRON_FAR_Z;
+  const centerZ = (TRANSITION_APRON_NEAR_Z + TRANSITION_APRON_FAR_Z) / 2;
+  const material = new MeshPhysicalMaterial({ color: ASPHALT_COLOR, metalness: 0.1, roughness: 0.9, clearcoat: 0 });
+  varyMaterial(material, 610);
+  const apron = new Mesh(new BoxGeometry(48, 0.3, length), material);
+  apron.position.set(0, -0.15, centerZ);
+  apron.receiveShadow = true;
+  return apron;
 }
 
 /** Ground Chapter Cinematic Realism Pass, Commit 1: hub #1 (formerly at
@@ -1011,7 +1072,7 @@ export class GroundEnvironment {
     this.group = new Group();
     this.fleet = createFleet();
     this.routeLine = createRouteLine();
-    this.group.add(createHighway(), createHubSilhouettes(), this.fleet, this.routeLine);
+    this.group.add(createHighway(), createTransitionApron(), createHubSilhouettes(), this.fleet, this.routeLine);
 
     // Ground Chapter Cinematic Realism Pass, Commit 1: the dock/yard
     // operation is the chapter's actual visual subject now -- the highway
