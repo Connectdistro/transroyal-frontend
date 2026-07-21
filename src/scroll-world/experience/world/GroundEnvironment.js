@@ -509,6 +509,35 @@ function createForkliftCorridorMarkings() {
   return group;
 }
 
+// Ground Chapter Full Rebuild, Step 5: waypoints for the dock/queue lane,
+// recalibrated for the new warehouse's own dock-face position (the live
+// bay's door/platform sit around world z=-308.8/-307.8, closer to
+// DOCK_CENTER_Z than the old building's own bay wing was) but keeping the
+// same relative spacing the proven dock cycle already used (16 units
+// dock-to-queue, 10 units queue-to-spawn). DOCK_LANE_X matches the live
+// bay's own x exactly (both equal DOCK_CENTER_X) so a docked truck lines
+// up with the door dead-on.
+const DOCK_LANE_X = DOCK_CENTER_X;
+const QUEUE_LANE_X = DOCK_LANE_X - 4;
+const DOCK_TRUCK_WAYPOINT_Z = DOCK_CENTER_Z + 6;
+const QUEUE_WAYPOINT_Z = DOCK_CENTER_Z + 22;
+const SPAWN_WAYPOINT_Z = DOCK_CENTER_Z + 32;
+
+/** Sells "a queue," not just one waiting truck -- static dressing further
+ *  back along the queue lane's own line, past where the live queued
+ *  truck (wired in a later step) will sit. Same technique proven earlier
+ *  this session: idle micro-motion only, no dock-cycle participation. */
+function createQueueDressing() {
+  const trucks = [];
+  [SPAWN_WAYPOINT_Z + 4, SPAWN_WAYPOINT_Z + 10].forEach((z, i) => {
+    const truck = createTruck(i === 0 ? 0xcfd3da : 0xc4c8d0, 42 + i, { livery: true });
+    truck.position.set(QUEUE_LANE_X, 0, z);
+    truck.rotation.y = Math.PI;
+    trucks.push(truck);
+  });
+  return trucks;
+}
+
 /**
  * The Container Port / Road Network (Production Handbook Section 23, Scene
  * 04). Own region of the continuous scene graph (Section 9: `REGION_Z`),
@@ -555,6 +584,11 @@ export class GroundEnvironment {
       forklift.position.set(FORKLIFT_IDLE[i].x, 0, FORKLIFT_IDLE[i].z);
       this.group.add(forklift);
     });
+
+    // Ground Chapter Full Rebuild, Step 5: queue-dressing trucks, same
+    // proven technique from the vehicle-organization pass.
+    this.queueDressingTrucks = createQueueDressing();
+    this.queueDressingTrucks.forEach((truck) => this.group.add(truck));
 
     // These two params are only this light's initial value -- shots.js's
     // LIGHT_TINTS.ground overrides both immediately below.
@@ -663,6 +697,17 @@ export class GroundEnvironment {
       forklift.userData.beacon.rotation.y = time.elapsed / 260 + i * 3;
       const blink = Math.sin(time.elapsed / 340 + i * 5) > 0.6 ? 1 : 0.25;
       forklift.userData.beaconLight.intensity = 1.6 * blink * this.activityWeight;
+    });
+
+    // Ground Chapter Full Rebuild, Step 5: queue-dressing trucks never
+    // move (no dock-cycle participation), but sitting perfectly rigid
+    // next to genuinely animated vehicles reads as frozen -- same idle-
+    // vibration bounce and body-roll formulas the highway fleet already
+    // uses, without the wrap-taper/braking terms that don't apply to a
+    // parked truck.
+    this.queueDressingTrucks.forEach((truck, i) => {
+      truck.position.y = Math.sin(time.elapsed / 90 + i * 1.7) * 0.004;
+      truck.rotation.z = Math.sin(time.elapsed / 1750 + i * 2.3) * 0.012;
     });
   }
 
