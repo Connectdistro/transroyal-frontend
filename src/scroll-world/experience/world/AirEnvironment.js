@@ -764,7 +764,7 @@ export class AirEnvironment {
       cloud.position.x += Math.sin(time.elapsed / 9000 + i) * 0.002 + proximity * 0.0015;
     });
 
-    const pulse = 0.85 + 0.15 * Math.sin(time.elapsed / PULSE_PERIOD);
+    const pulse = 0.85 + 0.15 * Math.sin((time.elapsed / PULSE_PERIOD) * Math.PI * 2);
     this.lightTrails.userData.lines.forEach((line) => {
       line.material.opacity = line.material.userData.baseOpacity * pulse;
     });

@@ -1290,7 +1290,7 @@ export class GroundEnvironment {
       truck.rotation.z = Math.sin(time.elapsed / 1750 + truckIndex * 2.3) * 0.012;
     });
 
-    const pulse = 1 - 0.2 + 0.2 * Math.sin(time.elapsed / 3800);
+    const pulse = 1 - 0.2 + 0.2 * Math.sin((time.elapsed / 3800) * Math.PI * 2);
     this.routeLine.material.opacity = this.routeLine.material.userData.baseOpacity * pulse;
 
     this.updateDockCycle(time);

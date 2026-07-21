@@ -151,12 +151,12 @@ export class CameraRig {
   }
 
   /**
-   * Points the rig at a named shot from shots.js. `instant` (the only mode
-   * used anywhere today) snaps the live camera straight to the shot with no
-   * easing, so the rendered frame is identical to a hand-set camera --
-   * interpolation only engages once a future caller passes
-   * `{ instant: false }` and lets update() close the distance over
-   * subsequent frames.
+   * Points the rig at a named shot from shots.js. `instant` (the default,
+   * used only for the constructor's very first shot, above) snaps the live
+   * camera straight to the shot with no easing, so the rendered frame is
+   * identical to a hand-set camera. Every real chapter transition passes
+   * `{ instant: false }` (see camera-sync.js) and lets update() close the
+   * distance over subsequent frames instead.
    */
   setShot(shotId, { instant = true } = {}) {
     const shot = SHOTS[shotId];

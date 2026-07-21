@@ -57,6 +57,15 @@ const MIN_TAPER_FACTOR = 0.2;
 // deterministic (seeded, not Math.random()) motion conventions.
 const DIVERTER_LINE_INDEX = 1;
 const DIVERTER_PARCEL_LOCAL_INDEX = 0;
+// Cinematic Cohesion Pass: this parcel is the one identifiable shipment
+// this chapter is actually about -- every other chapter's own hero cargo
+// (Pickup's van parcel, Ground's forklift cargoBox, Air's cargo pod) uses
+// this exact hex ("the same shipment," echoed chapter to chapter); until
+// now this one was left in the shared navy pool with its 11 non-hero
+// siblings, breaking that chain right in the middle of the journey.
+const DIVERTER_PARCEL_COLOR = 0x2f5fae;
+// Matches Delivered/FinalMile's own parcel-label idiom.
+const DIVERTER_PARCEL_LABEL_COLOR = 0xeef2ff;
 // A junction past the belt's own midpoint (REGION_Z), so the diverted
 // parcel has real travel distance on the spur before it reaches endZ and
 // resets -- verified against createConveyors()'s own parcel z range
@@ -282,6 +291,23 @@ export class SortingEnvironment {
       this.conveyors.userData.parcels[DIVERTER_LINE_INDEX * 4 + DIVERTER_PARCEL_LOCAL_INDEX];
     this.diverterParcel.userData.baseX = this.diverterParcel.position.x;
     this.diverterParcel.userData.diverted = false;
+
+    // Cinematic Cohesion Pass: swapped off the shared navy pool onto its
+    // own material/color (its 11 siblings on these conveyors keep the
+    // navy pool untouched) plus a small top-face label -- the Sorting
+    // shot looks down the line at an 8-10deg tilt, so a top-face label is
+    // what actually reads here, unlike Delivered/FinalMile's side-face
+    // labels which are viewed near eye level. Without some visible trait
+    // a viewer has no way to notice which of the 12 identical boxes is
+    // "the" shipment before it visibly diverts.
+    this.diverterParcel.material = new MeshStandardMaterial({ color: DIVERTER_PARCEL_COLOR, roughness: 0.5, metalness: 0.2 });
+    const diverterLabel = new Mesh(
+      new BoxGeometry(0.3, 0.02, 0.2),
+      new MeshBasicMaterial({ color: DIVERTER_PARCEL_LABEL_COLOR, transparent: true, opacity: 0.5 })
+    );
+    diverterLabel.position.set(0, 0.31, 0); // parcel is BoxGeometry(0.9, 0.6, 0.9) -- 0.31 sits just above its top face
+    this.diverterParcel.add(diverterLabel);
+
     this.diverterArmDeploy = 0;
 
     this.particles = createParticles({

@@ -392,7 +392,7 @@ export class FinalMileEnvironment {
     const pulse = 0.6 + 0.4 * Math.sin(time.elapsed / 2600);
     this.indicator.scale.setScalar(0.85 + pulse * 0.3);
 
-    const linePulse = 0.8 + 0.2 * Math.sin(time.elapsed / 3200);
+    const linePulse = 0.8 + 0.2 * Math.sin((time.elapsed / 3200) * Math.PI * 2);
     this.routeLine.material.opacity = this.routeLine.material.userData.baseOpacity * linePulse;
 
     // Choreography Refinement Pass: eases toward whatever
