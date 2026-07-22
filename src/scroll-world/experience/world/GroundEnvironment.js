@@ -2,6 +2,7 @@ import {
   Box3,
   BoxGeometry,
   CapsuleGeometry,
+  CatmullRomCurve3,
   CylinderGeometry,
   Group,
   Mesh,
@@ -10,6 +11,7 @@ import {
   MeshStandardMaterial,
   PointLight,
   SphereGeometry,
+  TubeGeometry,
   Vector3,
 } from 'three';
 import { createLights } from './createLights.js';
@@ -32,6 +34,10 @@ import { varyMaterial } from './materialVariation.js';
 // activityWeight/light-tint system, and REGION_Z's role positioning this
 // chapter in the shared scene graph between Sorting and Air.
 const REGION_Z = -330;
+// Sorting/Ground Link Pass: matches Sorting/Pickup/Air's own route-line
+// tube color exactly -- it's the same physical shipment-tracking line
+// continuing through this chapter, not a new one.
+const ELECTRIC_400 = 0x4fa3ff;
 const ELECTRIC_500 = 0x2f8bff;
 const ROYAL_600 = 0x2540b0;
 const OFFWHITE_100 = 0xeef2ff;
@@ -262,6 +268,34 @@ function createHubSilhouettes() {
 const DOCK_CENTER_X = 2;
 const DOCK_CENTER_Z = -310;
 const CONTAINER_COLORS = [0x2f5fae, 0x8a3a2a, 0x3a6b4a];
+
+// Sorting/Ground Link Pass: same physical tube, same pulse -- matches
+// Sorting's own PULSE_PERIOD/PULSE_DEPTH exactly rather than picking a new
+// beat, so the line reads as continuous through the hand-off, not two
+// differently-timed segments.
+const ROUTE_PULSE_PERIOD_MS = 3400;
+const ROUTE_PULSE_DEPTH = 0.25;
+
+/** Continues Sorting's own route line from its exact hand-off point --
+ *  SortingEnvironment.js's createRouteLine() ends at (0, 0.65,
+ *  TRANSITION_APRON_NEAR_Z) by design (its own comment: "GroundEnvironment
+ *  .js's own route line start is updated to the same coordinate, keeping
+ *  the two chapters' tubes joined exactly") -- across the apron and into
+ *  the yard, ending at the live dock door: the shipment's actual
+ *  destination this chapter. Control points checked clear of the highway
+ *  lanes (x -19/-15/23/29) and the dock cluster -- this is the shortest
+ *  legible path from the hand-off point to the door, not decorative. */
+function createRouteLine() {
+  const curve = new CatmullRomCurve3([
+    new Vector3(0, 0.65, TRANSITION_APRON_NEAR_Z),
+    new Vector3(1, 0.3, -240),
+    new Vector3(2, 0.1, DOCK_CENTER_Z + 20),
+    new Vector3(DOCK_CENTER_X, 0.1, DOCK_CENTER_Z + 1.2),
+  ]);
+  const material = new MeshBasicMaterial({ color: ELECTRIC_400, transparent: true, opacity: 0.85 });
+  material.userData.baseOpacity = material.opacity;
+  return new Mesh(new TubeGeometry(curve, 100, 0.05, 8, false), material);
+}
 
 /** Ground Chapter Full Rebuild, Step 3: an angled, two-wing warehouse --
  *  the defining shape in the real reference footage (reference/ground/
@@ -854,7 +888,8 @@ export class GroundEnvironment {
     // this chapter's own camera sightline before anything else is built
     // against it.
     this.fleet = createFleet();
-    this.group.add(createHighway(), createTransitionApron(), createHubSilhouettes(), this.fleet);
+    this.routeLine = createRouteLine();
+    this.group.add(createHighway(), createTransitionApron(), createHubSilhouettes(), this.fleet, this.routeLine);
 
     // Ground Chapter Full Rebuild, Step 3: the angled two-wing warehouse +
     // dense dock row -- the defining shape from the real reference
@@ -1002,6 +1037,12 @@ export class GroundEnvironment {
     const tintT = dampFactor(LIGHT_TINT_HALF_LIFE_MS, time.delta);
     this.keyLight.color.lerp(this.targetKeyColor, tintT);
     this.fillLight.color.lerp(this.targetFillColor, tintT);
+
+    // Sorting/Ground Link Pass: same pulse formula Sorting's own route
+    // line uses, so the two chapters' tubes read as one continuously
+    // pulsing line through the hand-off, not two independently-timed ones.
+    const routePulse = 1 - ROUTE_PULSE_DEPTH + ROUTE_PULSE_DEPTH * Math.sin((time.elapsed / ROUTE_PULSE_PERIOD_MS) * Math.PI * 2);
+    this.routeLine.material.opacity = this.routeLine.material.userData.baseOpacity * routePulse;
 
     const deltaSeconds = time.delta / 1000;
     const halfLength = HIGHWAY_LENGTH / 2;
