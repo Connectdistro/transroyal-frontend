@@ -367,9 +367,13 @@ function createWarehouse() {
 // Phase's own established fix for the near-collision a single shared
 // DROP/PICKUP pair caused last time this was built; offsetting from the
 // start avoids reintroducing it.
+// Ground Chapter Composition Pass: widened +1 on both -- a bigger, more
+// legible sweep for the one motion this corridor produces. Checked clear
+// of Wing B's second dock platform (world x 10.8-12.6): pallet pool's own
+// outer bound (DROP[0].x+1.05 = 9.05) still leaves ~1.75 units of margin.
 const FORKLIFT_DROP = [
-  { x: DOCK_CENTER_X + 5, z: DOCK_CENTER_Z + 5 },
-  { x: DOCK_CENTER_X + 6.1, z: DOCK_CENTER_Z + 5 },
+  { x: DOCK_CENTER_X + 6, z: DOCK_CENTER_Z + 5 },
+  { x: DOCK_CENTER_X + 7.1, z: DOCK_CENTER_Z + 5 },
 ];
 // Ground Chapter Composition Pass: PICKUP used to sit at (DOCK_CENTER_X,
 // DOCK_CENTER_Z+6) -- the dock truck's own resting point once its
