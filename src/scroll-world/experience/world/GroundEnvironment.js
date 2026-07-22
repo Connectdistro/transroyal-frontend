@@ -1174,9 +1174,20 @@ export class GroundEnvironment {
       const mast = forklift.userData.mast;
       if (mast) mast.rotation.z = Math.sin(time.elapsed / 580 + i * 2.3) * 0.01;
 
+      // Ground Chapter Composition Pass: brighter, crisper strobe
+      // specifically during 'unload' -- from the fixed, wide establishing
+      // camera these ~1.2-unit rigs read as barely-visible dark shapes;
+      // the working-amber beacon is the one thing on them designed to
+      // read at a distance, so this leans further into it rather than
+      // adding new geometry. Amber is already the correct, established
+      // color for this (Material Language Guide: industrial safety already
+      // uses 0xffaa33, real-world convention) -- not a new brand color.
       forklift.userData.beacon.rotation.y = time.elapsed / 260 + i * 3;
-      const blink = Math.sin(time.elapsed / 340 + i * 5) > 0.6 ? 1 : 0.25;
-      forklift.userData.beaconLight.intensity = 1.6 * blink * this.activityWeight;
+      const isUnloading = phase === 'unload';
+      const blinkLow = isUnloading ? 0.05 : 0.25;
+      const blink = Math.sin(time.elapsed / 340 + i * 5) > 0.6 ? 1 : blinkLow;
+      const beaconBase = isUnloading ? 2.4 : 1.6;
+      forklift.userData.beaconLight.intensity = beaconBase * blink * this.activityWeight;
     });
 
     // A small camera lead toward the dock truck's own direction of
