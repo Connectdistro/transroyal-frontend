@@ -800,33 +800,46 @@ function createYardMarkings() {
 const GATE_TRIGGER_DISTANCE = 14;
 const GATE_HALF_LIFE_MS = 260;
 const GATE_CLOSED_ROTATION = 0;
-const GATE_OPEN_ROTATION = -Math.PI / 2.2;
+const GATE_OPEN_ROTATION_MAGNITUDE = Math.PI / 2.2;
 
-/** A toll-gate booth + single barrier arm spanning the road's own full
- *  lane group -- same "cheapest believable" idiom as the dock door (one
- *  rigid arm on a pivot, not a jointed mechanism). Reused for both the
- *  entry (demarcation) and exit gate via updateTollGate() below, not two
- *  separate implementations. Booth sits on the east shoulder (local
- *  x=+33 -- clear of every highway lane (-19..29) and the apron's own
- *  x=34 edge by 3+ units); the arm pivots there and spans back across the
- *  full road width to clear the west boundary fence (world x=-28) too. */
-function createTollGate(seed) {
+// Ground Road Structure Pass: split from one long (58-unit) arm spanning
+// the entire lane group into two shorter, more realistically-scaled
+// booths on the SAME line -- a west booth covering the west lane cluster
+// (-19, -15, -6 fleet/queue) and an east booth covering the east cluster
+// (2 dock, 23, 29 fleet), meeting near the road's own center (x=4, the
+// highway asphalt's own centerline) rather than one absurdly long pole.
+const TOLL_WEST_BOOTH_LOCAL_X = -28; // world x=-24 -- clear of lane -19 (world -19, half-width 1.6) with margin, inside the boundary fence (world x=-28)
+const TOLL_EAST_BOOTH_LOCAL_X = 33; // world x=37 -- clear of lane 29 and the apron's own east edge (34)
+const TOLL_WEST_ARM_LENGTH = 30; // covers world -23..7 -- spans lanes -19/-15/-6/2 with margin
+const TOLL_EAST_ARM_LENGTH = 31; // covers world 6..37 -- spans lanes 23/29 with margin, meeting the west arm's own reach near the centerline
+
+/** One toll-gate booth + barrier arm. `side` picks which half of the road
+ *  this instance covers (see the west/east constants above) -- two
+ *  instances, not one long arm, read as a real multi-lane tollbooth
+ *  plaza rather than a single implausible pole. */
+function createTollGate(seed, side) {
   const group = new Group();
+  const boothLocalX = side === 'west' ? TOLL_WEST_BOOTH_LOCAL_X : TOLL_EAST_BOOTH_LOCAL_X;
+  const armLength = side === 'west' ? TOLL_WEST_ARM_LENGTH : TOLL_EAST_ARM_LENGTH;
+  // Arm always reaches FROM the booth TOWARD the road's own centerline
+  // (local x=0) -- west booth's arm extends in +x, east booth's in -x.
+  const armSign = side === 'west' ? 1 : -1;
+
   const boothMaterial = new MeshStandardMaterial({ color: HUB_COLOR, roughness: 0.6, metalness: 0.2 });
   varyMaterial(boothMaterial, seed);
   const booth = new Mesh(new BoxGeometry(2, 2.6, 2), boothMaterial);
-  booth.position.set(33, 1.3, 0);
+  booth.position.set(boothLocalX, 1.3, 0);
   booth.castShadow = true;
   group.add(booth);
 
   const armPivot = new Group();
-  armPivot.position.set(32, 2.2, 0);
+  armPivot.position.set(boothLocalX - armSign, 2.2, 0);
   const arm = new Mesh(
-    new BoxGeometry(58, 0.15, 0.15),
+    new BoxGeometry(armLength, 0.15, 0.15),
     new MeshStandardMaterial({ color: 0xd8a021, roughness: 0.5, metalness: 0.2 })
   );
   varyMaterial(arm.material, seed + 1);
-  arm.position.set(-29, 0, 0);
+  arm.position.set((armLength / 2) * armSign, 0, 0);
   arm.castShadow = true;
   armPivot.add(arm);
   group.add(armPivot);
@@ -834,10 +847,15 @@ function createTollGate(seed) {
   // Real-world red/amber signal convention (Material Language Guide:
   // industrial safety already uses these, real-world convention wins).
   const light = new PointLight(0xff3b30, 0, 4, 2);
-  light.position.set(33, 2.7, 0);
+  light.position.set(boothLocalX, 2.7, 0);
   group.add(light);
 
-  group.userData = { armPivot, light };
+  // The arm's resting position points in +x for the west gate and -x for
+  // the east gate (armSign above) -- rotating both by the SAME sign around
+  // Z would swing one arm up and the other down into the ground. Each
+  // gate stores its own correctly-signed open rotation so both visibly
+  // lift the same real-world way regardless of which side they're on.
+  group.userData = { armPivot, light, openRotation: armSign * GATE_OPEN_ROTATION_MAGNITUDE };
   return group;
 }
 
@@ -847,7 +865,7 @@ function createTollGate(seed) {
  *  the two dock-cycle rigs), not duplicated logic per gate. */
 function updateTollGate(gate, gateZ, vehiclePositions, motionT) {
   const vehicleNear = vehiclePositions.some((z) => Math.abs(z - gateZ) < GATE_TRIGGER_DISTANCE);
-  const targetRotation = vehicleNear ? GATE_OPEN_ROTATION : GATE_CLOSED_ROTATION;
+  const targetRotation = vehicleNear ? gate.userData.openRotation : GATE_CLOSED_ROTATION;
   gate.userData.armPivot.rotation.z += (targetRotation - gate.userData.armPivot.rotation.z) * motionT;
   gate.userData.light.intensity = vehicleNear ? 1.4 : 0;
 }
@@ -1110,12 +1128,18 @@ export class GroundEnvironment {
     this.group.add(createBoundaryFence());
     this.group.add(createYardMarkings());
 
-    // Ground Road Structure Pass: the entry (demarcation) and exit gates.
-    this.entryGate = createTollGate(630);
-    this.entryGate.position.set(4, 0, ENTRY_BOUNDARY_Z);
-    this.exitGate = createTollGate(632);
-    this.exitGate.position.set(4, 0, EXIT_GATE_Z);
-    this.group.add(this.entryGate, this.exitGate);
+    // Ground Road Structure Pass: the entry (demarcation) and exit gates,
+    // each split into a west + east booth on the same line (see
+    // createTollGate's own comment) rather than one implausibly long arm.
+    this.entryGateWest = createTollGate(630, 'west');
+    this.entryGateWest.position.set(4, 0, ENTRY_BOUNDARY_Z);
+    this.entryGateEast = createTollGate(631, 'east');
+    this.entryGateEast.position.set(4, 0, ENTRY_BOUNDARY_Z);
+    this.exitGateWest = createTollGate(632, 'west');
+    this.exitGateWest.position.set(4, 0, EXIT_GATE_Z);
+    this.exitGateEast = createTollGate(633, 'east');
+    this.exitGateEast.position.set(4, 0, EXIT_GATE_Z);
+    this.group.add(this.entryGateWest, this.entryGateEast, this.exitGateWest, this.exitGateEast);
 
     // Ground Chapter Full Rebuild, Step 7: the dock cycle's two
     // choreographed rigs, recycled from a small pool the same way the
@@ -1298,8 +1322,10 @@ export class GroundEnvironment {
     // per-gate logic.
     const gateT = dampFactor(GATE_HALF_LIFE_MS, time.delta);
     const vehicleZs = [...this.fleet.userData.trucks.map((t) => t.position.z), this.dockTruck.position.z, this.queuedTruck.position.z];
-    updateTollGate(this.entryGate, ENTRY_BOUNDARY_Z, vehicleZs, gateT);
-    updateTollGate(this.exitGate, EXIT_GATE_Z, vehicleZs, gateT);
+    updateTollGate(this.entryGateWest, ENTRY_BOUNDARY_Z, vehicleZs, gateT);
+    updateTollGate(this.entryGateEast, ENTRY_BOUNDARY_Z, vehicleZs, gateT);
+    updateTollGate(this.exitGateWest, EXIT_GATE_Z, vehicleZs, gateT);
+    updateTollGate(this.exitGateEast, EXIT_GATE_Z, vehicleZs, gateT);
   }
 
   /** Ground Chapter Full Rebuild, Step 7: the dock's single operational
