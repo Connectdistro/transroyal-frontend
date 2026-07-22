@@ -789,6 +789,61 @@ function createYardMarkings() {
   return group;
 }
 
+const GATE_TRIGGER_DISTANCE = 14;
+const GATE_HALF_LIFE_MS = 260;
+const GATE_CLOSED_ROTATION = 0;
+const GATE_OPEN_ROTATION = -Math.PI / 2.2;
+
+/** A toll-gate booth + single barrier arm spanning the road's own full
+ *  lane group -- same "cheapest believable" idiom as the dock door (one
+ *  rigid arm on a pivot, not a jointed mechanism). Reused for both the
+ *  entry (demarcation) and exit gate via updateTollGate() below, not two
+ *  separate implementations. Booth sits on the east shoulder (local
+ *  x=+33 -- clear of every highway lane (-19..29) and the apron's own
+ *  x=34 edge by 3+ units); the arm pivots there and spans back across the
+ *  full road width to clear the west boundary fence (world x=-28) too. */
+function createTollGate(seed) {
+  const group = new Group();
+  const boothMaterial = new MeshStandardMaterial({ color: HUB_COLOR, roughness: 0.6, metalness: 0.2 });
+  varyMaterial(boothMaterial, seed);
+  const booth = new Mesh(new BoxGeometry(2, 2.6, 2), boothMaterial);
+  booth.position.set(33, 1.3, 0);
+  booth.castShadow = true;
+  group.add(booth);
+
+  const armPivot = new Group();
+  armPivot.position.set(32, 2.2, 0);
+  const arm = new Mesh(
+    new BoxGeometry(58, 0.15, 0.15),
+    new MeshStandardMaterial({ color: 0xd8a021, roughness: 0.5, metalness: 0.2 })
+  );
+  varyMaterial(arm.material, seed + 1);
+  arm.position.set(-29, 0, 0);
+  arm.castShadow = true;
+  armPivot.add(arm);
+  group.add(armPivot);
+
+  // Real-world red/amber signal convention (Material Language Guide:
+  // industrial safety already uses these, real-world convention wins).
+  const light = new PointLight(0xff3b30, 0, 4, 2);
+  light.position.set(33, 2.7, 0);
+  group.add(light);
+
+  group.userData = { armPivot, light };
+  return group;
+}
+
+/** Shared per-frame gate update -- arm lifts whenever any tracked vehicle
+ *  is within GATE_TRIGGER_DISTANCE of the gate's own Z, lowers otherwise.
+ *  Called once per gate per frame against the SAME vehicle list (fleet +
+ *  the two dock-cycle rigs), not duplicated logic per gate. */
+function updateTollGate(gate, gateZ, vehiclePositions, motionT) {
+  const vehicleNear = vehiclePositions.some((z) => Math.abs(z - gateZ) < GATE_TRIGGER_DISTANCE);
+  const targetRotation = vehicleNear ? GATE_OPEN_ROTATION : GATE_CLOSED_ROTATION;
+  gate.userData.armPivot.rotation.z += (targetRotation - gate.userData.armPivot.rotation.z) * motionT;
+  gate.userData.light.intensity = vehicleNear ? 1.4 : 0;
+}
+
 /** Sells "a queue," not just one waiting truck -- static dressing further
  *  back along the queue lane's own line, past where the live queued
  *  truck (wired in a later step) will sit. Same technique proven earlier
@@ -1047,6 +1102,13 @@ export class GroundEnvironment {
     this.group.add(createBoundaryFence());
     this.group.add(createYardMarkings());
 
+    // Ground Road Structure Pass: the entry (demarcation) and exit gates.
+    this.entryGate = createTollGate(630);
+    this.entryGate.position.set(4, 0, ENTRY_BOUNDARY_Z);
+    this.exitGate = createTollGate(632);
+    this.exitGate.position.set(4, 0, EXIT_GATE_Z);
+    this.group.add(this.entryGate, this.exitGate);
+
     // Ground Chapter Full Rebuild, Step 7: the dock cycle's two
     // choreographed rigs, recycled from a small pool the same way the
     // proven mechanism always has -- `dockTruck`/`queuedTruck` swap roles
@@ -1220,6 +1282,16 @@ export class GroundEnvironment {
     });
 
     this.updateDockCycle(time);
+
+    // Ground Road Structure Pass: both gates react to the SAME tracked
+    // vehicle list (all 4 fleet trucks plus the two dock-cycle rigs),
+    // read after updateDockCycle() so every position is current for this
+    // frame. One shared update function (updateTollGate), not duplicated
+    // per-gate logic.
+    const gateT = dampFactor(GATE_HALF_LIFE_MS, time.delta);
+    const vehicleZs = [...this.fleet.userData.trucks.map((t) => t.position.z), this.dockTruck.position.z, this.queuedTruck.position.z];
+    updateTollGate(this.entryGate, ENTRY_BOUNDARY_Z, vehicleZs, gateT);
+    updateTollGate(this.exitGate, EXIT_GATE_Z, vehicleZs, gateT);
   }
 
   /** Ground Chapter Full Rebuild, Step 7: the dock's single operational
