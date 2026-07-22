@@ -65,16 +65,22 @@ const TRANSITION_APRON_FAR_Z = -280;
 const LANE_X = [-19, -15, 23, 29];
 const FLEET_SPEED = 6.5;
 const VELOCITY_HALF_LIFE_MS = 300;
-// Ground Chapter Cross-Chapter Continuity Pass: was symmetric
-// (REGION_Z +/- HIGHWAY_LENGTH/2); the near edge now extends into the
-// transition apron (paved since the Sorting/Ground Link Pass -- see
-// TRANSITION_APRON_NEAR_Z/FAR_Z) so the fleet is already visibly moving
-// well before the camera crosses into Ground's own section -- one
-// continuous journey, not a hard start. Left a 10-unit margin before
-// TRANSITION_APRON_NEAR_Z (Sorting's own floor edge) so a truck never
-// reads as driving into Sorting's interior.
-const FLEET_NEAR_WRAP_Z = TRANSITION_APRON_NEAR_Z + 10;
-const FLEET_FAR_WRAP_Z = REGION_Z - HIGHWAY_LENGTH / 2;
+// Ground Road Structure Pass: the Sorting/Ground border itself
+// (TRANSITION_APRON_NEAR_Z=-206) is the demarcation line -- vehicles must
+// never cross it. An earlier version of this constant let fleet trucks
+// reach z=-196, 10 units PAST the border into Sorting's own floor depth;
+// that direction was backwards. ENTRY_BOUNDARY_Z is the hard line itself;
+// ENTRY_STOP_Z is where a truck's own geometry (cab reaches ~6.1 local
+// units past its group origin) actually comes to rest, comfortably behind
+// the line. Trucks that reach it stop and reverse (see the fleet's own
+// update() below) rather than crossing or teleporting -- "the road
+// doesn't continue into Sorting's building, so traffic turns around
+// here," not a portal. The far boundary is unchanged: it's a real chapter
+// exit (delivery continuing on toward Air), so it keeps the existing
+// wrap/recycle behavior, not a stop-and-reverse.
+const ENTRY_BOUNDARY_Z = TRANSITION_APRON_NEAR_Z;
+const ENTRY_STOP_Z = ENTRY_BOUNDARY_Z - 8;
+const EXIT_GATE_Z = REGION_Z - HIGHWAY_LENGTH / 2;
 const WRAP_TAPER_DISTANCE = HIGHWAY_LENGTH * 0.12;
 const MIN_TAPER_FACTOR = 0.15;
 const BRAKE_DIVE_AMPLITUDE = 0.035;
@@ -242,6 +248,12 @@ function createFleet() {
     truck.position.set(x, 0, z);
     truck.rotation.y = i % 2 === 0 ? 0 : Math.PI;
     truck.userData.direction = i % 2 === 0 ? 1 : -1;
+    // Ground Road Structure Pass: tracks the truck's own target facing so
+    // a reversal at the entry boundary (see update()) can ease rotation.y
+    // toward it, the same heading-turn idiom the dock cycle already uses
+    // (DEPART_TURN_HALF_LIFE_MS), instead of an instant, physically
+    // impossible flip.
+    truck.userData.headingY = truck.rotation.y;
     truck.userData.targetSpeed = FLEET_SPEED * (0.7 + (0.3 * (i % 3)) / 2);
     truck.userData.speed = truck.userData.targetSpeed;
     group.add(truck);
@@ -1148,17 +1160,31 @@ export class GroundEnvironment {
 
     const deltaSeconds = time.delta / 1000;
     const velocityT = dampFactor(VELOCITY_HALF_LIFE_MS, time.delta);
+    const fleetTurnT = dampFactor(DEPART_TURN_HALF_LIFE_MS, time.delta);
     this.fleet.userData.trucks.forEach((truck, truckIndex) => {
       const distanceToWrap =
-        truck.userData.direction > 0 ? FLEET_NEAR_WRAP_Z - truck.position.z : truck.position.z - FLEET_FAR_WRAP_Z;
+        truck.userData.direction > 0 ? ENTRY_STOP_Z - truck.position.z : truck.position.z - EXIT_GATE_Z;
       const taper = Math.max(MIN_TAPER_FACTOR, Math.min(1, distanceToWrap / WRAP_TAPER_DISTANCE));
       const desiredSpeed = truck.userData.targetSpeed * taper;
       truck.userData.speed += (desiredSpeed - truck.userData.speed) * velocityT;
 
       const truckDeltaZ = truck.userData.speed * truck.userData.direction * deltaSeconds;
       truck.position.z += truckDeltaZ;
-      if (truck.position.z > FLEET_NEAR_WRAP_Z) truck.position.z = FLEET_FAR_WRAP_Z;
-      if (truck.position.z < FLEET_FAR_WRAP_Z) truck.position.z = FLEET_NEAR_WRAP_Z;
+      // Entry boundary (Sorting dock end): hard stop + reverse -- never
+      // crosses the demarcation line, never teleports. The taper above
+      // already brings speed toward zero on approach; flipping direction
+      // here (plus the heading-turn ease below) turns that stop into a
+      // believable U-turn instead of a portal.
+      if (truck.position.z > ENTRY_STOP_Z) {
+        truck.position.z = ENTRY_STOP_Z;
+        truck.userData.direction *= -1;
+        truck.userData.headingY = truck.userData.direction > 0 ? 0 : Math.PI;
+      }
+      // Far boundary: a real chapter exit (delivery continuing on toward
+      // Air) -- keeps the existing wrap/recycle behavior, a fresh truck
+      // "arriving" at the entry side continuing the same direction.
+      if (truck.position.z < EXIT_GATE_Z) truck.position.z = ENTRY_STOP_Z;
+      truck.rotation.y += (truck.userData.headingY - truck.rotation.y) * fleetTurnT;
 
       rollWheels(truck.userData.wheels, truckDeltaZ, TRUCK_WHEEL_RADIUS);
 
