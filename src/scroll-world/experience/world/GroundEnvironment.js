@@ -627,13 +627,11 @@ const DOCK_LANE_X = DOCK_CENTER_X;
 // Checked clear of everything else at this x/z: Wing A's wall footprint
 // (world x -10..14) does overlap this x, but only at z -310.5..-304.5
 // (the building itself), 16+ units of Z away from where a queued truck
-// actually sits (QUEUE_WAYPOINT_Z=-288) or spawns (SPAWN_WAYPOINT_Z=-278);
-// highway lanes (-19,-15,23,29) and the parking cluster (x 0-8, z
-// -330/-340) are untouched.
+// actually sits (QUEUE_WAYPOINT_Z=-288); highway lanes (-19,-15,23,29)
+// and the parking cluster (x 0-8, z -330/-340) are untouched.
 const QUEUE_LANE_X = DOCK_LANE_X - 8;
 const DOCK_TRUCK_WAYPOINT_Z = DOCK_CENTER_Z + 6;
 const QUEUE_WAYPOINT_Z = DOCK_CENTER_Z + 22;
-const SPAWN_WAYPOINT_Z = DOCK_CENTER_Z + 32;
 
 // Ground Chapter Composition Pass: the dock/queue role swap (updateDockCycle,
 // on entering 'arrive') relabels which physical rig is "dockTruck" vs
@@ -751,7 +749,11 @@ function createBoundaryFence() {
   const group = new Group();
   const postMaterial = new MeshStandardMaterial({ color: 0x3a3e46, roughness: 0.6, metalness: 0.3 });
   const railMaterial = new MeshStandardMaterial({ color: 0x50555f, roughness: 0.5, metalness: 0.3 });
-  const runZ = [SPAWN_WAYPOINT_Z + 14, DOCK_CENTER_Z - 32]; // spans past the parking cluster's own far row (z=-340)
+  // Ground Road Structure Pass: was anchored on the now-removed
+  // SPAWN_WAYPOINT_Z (-278); QUEUE_WAYPOINT_Z + 24 lands on the exact same
+  // -264 the fence's own north end always had, so its visual position is
+  // unchanged.
+  const runZ = [QUEUE_WAYPOINT_Z + 24, DOCK_CENTER_Z - 32]; // spans past the parking cluster's own far row (z=-340)
   // Just past the highway/apron's own west edge (asphalt spans x -26..34)
   // so the fence marks the yard's actual boundary rather than sitting on
   // the pavement.
@@ -793,7 +795,11 @@ function createYardMarkings() {
  *  this session: idle micro-motion only, no dock-cycle participation. */
 function createQueueDressing() {
   const trucks = [];
-  [SPAWN_WAYPOINT_Z + 4, SPAWN_WAYPOINT_Z + 10].forEach((z, i) => {
+  // Ground Road Structure Pass: was anchored on the now-removed
+  // SPAWN_WAYPOINT_Z (-278); QUEUE_WAYPOINT_Z + 14/+20 land on the exact
+  // same -274/-268 these always sat at, so their visual position is
+  // unchanged.
+  [QUEUE_WAYPOINT_Z + 14, QUEUE_WAYPOINT_Z + 20].forEach((z, i) => {
     const truck = createTruck(i === 0 ? 0xcfd3da : 0xc4c8d0, 42 + i, { livery: true });
     truck.position.set(QUEUE_LANE_X, 0, z);
     truck.rotation.y = Math.PI;
@@ -1245,8 +1251,18 @@ export class GroundEnvironment {
     }
     this.dockCyclePhase = phase;
 
-    this.queuedTruck.userData.targetZ = phase === 'gap' ? SPAWN_WAYPOINT_Z : QUEUE_WAYPOINT_Z;
-    this.dockTruck.userData.targetZ = phase === 'depart' || phase === 'gap' ? SPAWN_WAYPOINT_Z : DOCK_TRUCK_WAYPOINT_Z;
+    // Ground Road Structure Pass: the two recycled rigs now run the FULL
+    // corridor loop instead of a short round-trip to a nearby spawn point
+    // -- arrive just inside ENTRY_STOP_Z, ease to queue, ease to dock,
+    // load (the existing forklift/pallet choreography -- "picking up the
+    // sorted shipment"), then depart all the way out to EXIT_GATE_Z (a
+    // real chapter exit, delivery continuing on toward Air) before
+    // recycling back to the entry side. Confirmed live: the existing
+    // damped-lerp reaches ~99% convergence within the existing depart+gap
+    // window even over this much longer distance, so the phase clock
+    // itself didn't need to change.
+    this.queuedTruck.userData.targetZ = phase === 'gap' ? ENTRY_STOP_Z : QUEUE_WAYPOINT_Z;
+    this.dockTruck.userData.targetZ = phase === 'depart' || phase === 'gap' ? EXIT_GATE_Z : DOCK_TRUCK_WAYPOINT_Z;
     const dockTruckDeltaZ = this.dockTruck.userData.targetZ - this.dockTruck.position.z;
     const queuedTruckDeltaZ = this.queuedTruck.userData.targetZ - this.queuedTruck.position.z;
     this.dockTruck.position.z += dockTruckDeltaZ * motionT;
@@ -1269,7 +1285,11 @@ export class GroundEnvironment {
     // to face its real direction of travel once clear of the dock.
     const turnT = dampFactor(DEPART_TURN_HALF_LIFE_MS, time.delta);
     [this.dockTruck, this.queuedTruck].forEach((truck) => {
-      const isDeparting = truck.userData.targetZ === SPAWN_WAYPOINT_Z;
+      // Both recycled rigs' "leaving the dock/queue area" targets now
+      // differ (EXIT_GATE_Z for the departing dock truck, ENTRY_STOP_Z
+      // for the truck heading back out to recycle) -- either one means
+      // "departing," not just the single old SPAWN_WAYPOINT_Z value.
+      const isDeparting = truck.userData.targetZ === EXIT_GATE_Z || truck.userData.targetZ === ENTRY_STOP_Z;
       const clearOfDock = truck.position.z >= DOCK_TRUCK_WAYPOINT_Z + DEPART_REVERSE_DISTANCE;
       truck.userData.headingY = isDeparting && clearOfDock ? 0 : Math.PI;
       truck.rotation.y += (truck.userData.headingY - truck.rotation.y) * turnT;
