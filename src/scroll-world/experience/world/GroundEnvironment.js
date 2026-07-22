@@ -643,33 +643,34 @@ const QUEUE_WAYPOINT_Z = DOCK_CENTER_Z + 22;
 // Ground Chapter Composition Pass: the dock/queue role swap (updateDockCycle,
 // on entering 'arrive') relabels which physical rig is "dockTruck" vs
 // "queuedTruck" without moving either -- each then eases toward the OTHER's
-// old lane+Z target. If X and Z shared the same half-life, the X gap between
-// them would hit exactly zero at t = one half-life into 'arrive'
-// (worked the closed-form damped-lerp trajectory to confirm), and at that
-// same moment the Z gap would only be ~half its final value -- both rigs'
-// ~10.2-unit footprints (cargo BoxGeometry(3,3,8) + cab BoxGeometry(2.6,2.4,2.2)
-// offset to local z=+5) would provably overlap. Widening the lanes alone
-// can't fix this: a full role swap means the two rigs' X positions MUST
+// old lane+Z target. A full role swap means the two rigs' X positions MUST
 // trade sides (start on opposite sides of 0, end on opposite sides of 0),
 // so by the intermediate value theorem their X gap is guaranteed to cross
-// zero at some point regardless of how far apart the lanes are -- and a
-// simple push-apart correction on X can't prevent that crossing either,
-// only how hard it's fought (numerically confirmed: an earlier draft of
-// this fix that only pushed X apart still produced worse overlap than no
-// guard at all, because it couldn't out-fight a crossing that's
-// mathematically forced).
+// zero at some point regardless of how far apart the lanes are -- a simple
+// push-apart correction on X can't prevent that crossing, only how hard
+// it's fought.
 //
-// The fix that actually works: let Z open its gap faster than X closes.
-// LANE_SWAP_HALF_LIFE_MS gives the X-lane transition its own, much slower,
-// half-life than DOCK_MOTION_HALF_LIFE_MS's 900ms Z motion -- so by the
-// time X reaches its own crossing point, Z has already had 3x longer to
-// separate. Numerically verified (fixed 16ms steps, worst-case start
-// condition of both rigs at identical Z): worst-case footprint overlap is
-// exactly zero at this half-life, with margin to spare. Doesn't touch
-// steady-state lane-holding -- both rigs already sit exactly on their own
-// lane's X outside a swap, so this only slows how fast a *deviation*
-// corrects, which only matters during the swap itself.
-const LANE_SWAP_HALF_LIFE_MS = 3000;
+// Ground Road Structure Pass: this half-life was originally tuned (3000ms,
+// much SLOWER than Z's own 900ms) for the short spawn-based system, where
+// both rigs started the swap already close together (both had just eased
+// toward the same nearby SPAWN_WAYPOINT_Z) and needed to DIVERGE to
+// opposite lanes -- slow X gave Z time to open a gap first. Once the dock
+// cycle was unified onto the full entry/exit corridor (ENTRY_STOP_Z/
+// EXIT_GATE_Z), the dynamic inverted: the two rigs now start the swap FAR
+// apart (one near the entry side, one near the exit side) and CONVERGE
+// toward the same narrow 16-unit dock/queue band (DOCK_TRUCK_WAYPOINT_Z=
+// -304, QUEUE_WAYPOINT_Z=-288) from opposite directions. Keeping the old
+// slow half-life left X still mid-transition exactly when Z convergence
+// brought them close, reintroducing real overlap (confirmed live and by
+// simulation: ~4.5 sq units at the old value). The fix for THIS dynamic is
+// the opposite one: X now needs to resolve to its final lane FAST, well
+// before Z's own (unavoidably longer, ~900ms-half-life) convergence
+// brings the rigs near each other -- matching DOCK_MOTION_HALF_LIFE_MS
+// itself rather than being slower than it. Numerically swept (fixed-step
+// simulation, 6 full cycles, frame deltas 8-500ms, mirroring the exact
+// production update logic): zero footprint overlap at this value, with a
+// clean ~300ms margin below where overlap starts reappearing (~1200ms).
+const LANE_SWAP_HALF_LIFE_MS = 900;
 
 const TRUCK_MIN_SEPARATION_X = 4.4; // > combined half-widths (1.6+1.6=3.2), ~1.2 margin
 const TRUCK_MIN_SEPARATION_Z = 12; // > combined footprint length (~10.2) -- gates whether overlap is even geometrically possible
