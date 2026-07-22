@@ -671,13 +671,52 @@ function maintainDockQueueSeparation(dockTruck, queuedTruck, correctionT) {
 // Ground Chapter Full Rebuild, Step 7: the service vehicle's own two-
 // point trip -- proven mechanism from the vehicle-organization pass,
 // retargeted between the dock row's own container-stack area and the new
-// parking cluster (no Ground Office in this rebuild's scope).
+// parking cluster.
 const SERVICE_POINT_A = { x: DOCK_CENTER_X + 9, z: DOCK_CENTER_Z + 4 };
-const SERVICE_POINT_B = { x: 4, z: -335 };
+// Ground Chapter Reference Pass: was inside the parking cluster's own
+// footprint (a truck-parking row sits at z=-330/-340) with no building
+// there at all. reference/ground/ground reference.mp4 (frames 010/014)
+// confirms a small standalone yard building DOES exist in the reference,
+// correcting the old assumption above -- moved just past the parking rows
+// and paired with one (createYardBuilding()), giving this trip a real
+// destination instead of an empty yard coordinate.
+const SERVICE_POINT_B = { x: 4, z: -349 };
 const SERVICE_MOTION_HALF_LIFE_MS = 900;
 const SERVICE_ARRIVE_DISTANCE = 0.4;
 const SERVICE_HOLD_MS = 1800;
 const SERVICE_HEADING_HALF_LIFE_MS = 500;
+
+/** Small standalone yard building -- confirmed present in the reference
+ *  footage (reference/ground/ground reference.mp4, frames 010/014),
+ *  correcting this file's own prior assumption that it wasn't. Generic/
+ *  unbranded single-story massing, not a copy of the reference's own
+ *  branded structure. Positioned at the service vehicle's own
+ *  SERVICE_POINT_B so its existing two-point trip gains a real
+ *  destination. */
+function createYardBuilding() {
+  const group = new Group();
+  const wallMaterial = new MeshStandardMaterial({ color: HUB_COLOR, roughness: 0.6, metalness: 0.15 });
+  varyMaterial(wallMaterial, 620);
+  const roofMaterial = new MeshStandardMaterial({ color: 0x121316, roughness: 0.8, metalness: 0.1 });
+  const body = new Mesh(new BoxGeometry(6, 3, 4), wallMaterial);
+  body.position.set(0, 1.5, 0);
+  body.castShadow = true;
+  body.receiveShadow = true;
+  const roof = new Mesh(new BoxGeometry(6.3, 0.3, 4.3), roofMaterial);
+  roof.position.set(0, 3.15, 0);
+  group.add(body, roof);
+  // A small tracking/dispatch accent -- Digital function, stays blue
+  // regardless of lighting per the Material Language Guide, the one
+  // deliberate brand-blue touch on an otherwise neutral structure.
+  const accent = new Mesh(
+    new BoxGeometry(6.02, 0.15, 0.1),
+    new MeshStandardMaterial({ color: ELECTRIC_500, roughness: 0.35, metalness: 0.25 })
+  );
+  accent.position.set(0, 2.3, 2.02);
+  group.add(accent);
+  group.position.set(SERVICE_POINT_B.x, 0, SERVICE_POINT_B.z - 3);
+  return group;
+}
 
 /** Sells "a queue," not just one waiting truck -- static dressing further
  *  back along the queue lane's own line, past where the live queued
@@ -926,6 +965,10 @@ export class GroundEnvironment {
     // Ground Chapter Full Rebuild, Step 6: the parking cluster.
     this.parkingTrucks = createParkingCluster();
     this.parkingTrucks.forEach((truck) => this.group.add(truck));
+
+    // Ground Chapter Reference Pass: the yard building the service
+    // vehicle's own point B is now targeted at (see SERVICE_POINT_B).
+    this.group.add(createYardBuilding());
 
     // Ground Chapter Full Rebuild, Step 7: the dock cycle's two
     // choreographed rigs, recycled from a small pool the same way the
