@@ -371,9 +371,17 @@ const FORKLIFT_DROP = [
   { x: DOCK_CENTER_X + 5, z: DOCK_CENTER_Z + 5 },
   { x: DOCK_CENTER_X + 6.1, z: DOCK_CENTER_Z + 5 },
 ];
+// Ground Chapter Composition Pass: PICKUP used to sit at (DOCK_CENTER_X,
+// DOCK_CENTER_Z+6) -- the dock truck's own resting point once its
+// rotation.y=PI is applied to its local geometry (world x 0.4-3.6, z
+// -310.1--299.9) -- so a forklift easing there drove straight into the
+// truck's own mesh. Moved to the truck's clear east flank, same side as
+// FORKLIFT_DROP (the west side was checked too: it would route the
+// straight-line ease path *through* the truck's footprint mid-transit,
+// trading one clip for another).
 const FORKLIFT_PICKUP = [
-  { x: DOCK_CENTER_X, z: DOCK_CENTER_Z + 6 },
-  { x: DOCK_CENTER_X + 1.4, z: DOCK_CENTER_Z + 6 },
+  { x: DOCK_CENTER_X + 2.8, z: DOCK_CENTER_Z + 6 },
+  { x: DOCK_CENTER_X + 4.2, z: DOCK_CENTER_Z + 6 },
 ];
 const FORKLIFT_IDLE = [
   { x: DOCK_CENTER_X + 3, z: DOCK_CENTER_Z + 3 },
