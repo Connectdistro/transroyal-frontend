@@ -87,7 +87,16 @@ const DIVERTER_ARM_RETRACTED_Y = Math.PI / 2;
 const DIVERTER_ARM_DEPLOYED_Y = 0;
 
 function createMezzanineFloor() {
-  const geometry = new BoxGeometry(30, 0.4, CONVEYOR_LENGTH + 6);
+  // Ground/Sorting Continuity Pass: widened from 30 -- Ground's highway
+  // fleet (LANE_X = [-19, -15, 23, 29] in GroundEnvironment.js) now
+  // travels up to z=-196 (FLEET_NEAR_WRAP_Z), which falls inside this
+  // floor's own depth (REGION_Z +/- 26 = -206..-154). At the old 30-unit
+  // width (x -15..15), three of Ground's four lanes ran off the edge of
+  // any floor at all -- confirmed by direct measurement, not assumed.
+  // Widened to 66 (x -33..33): covers every lane with a truck's own
+  // half-width (1.6) of margin, and stays clear of the scan arches' own
+  // posts (x=+-11) and beam (+-11.2).
+  const geometry = new BoxGeometry(66, 0.4, CONVEYOR_LENGTH + 6);
   const material = new MeshPhysicalMaterial({ color: FLOOR_COLOR, metalness: 0.1, roughness: 0.8, clearcoat: 0 });
   const floor = new Mesh(geometry, material);
   floor.position.set(0, -0.4, REGION_Z);
