@@ -681,9 +681,14 @@ const DEPART_REVERSE_DISTANCE = 8;
 const DEPART_TURN_HALF_LIFE_MS = 2200;
 const PALLET_SETTLE_HALF_LIFE_MS = 180;
 const PALLET_SETTLE_PERIOD_MS = 260;
-const PALLET_SETTLE_AMPLITUDE = 0.08;
+// Ground Chapter Composition Pass: both raised for a clearer, bigger read
+// from the fixed establishing camera -- lift height still clears the
+// mast's own top (y=2.4: BoxGeometry height 2.2 centered at y=1.3) with
+// margin to spare, and the settle bounce is still a brief overshoot, not a
+// bigger cargo box.
+const PALLET_SETTLE_AMPLITUDE = 0.14;
 const FORKLIFT_TRIP_PERIOD_MS = [2600, 3100];
-const FORKLIFT_LIFT_HEIGHT = 0.6;
+const FORKLIFT_LIFT_HEIGHT = 0.95;
 const LOADOUT_WINDOW_START = PHASE_UNLOAD_END;
 const LOADOUT_WINDOW_END = PHASE_DEPART_END - 2000;
 const LOADOUT_MIDPOINT = LOADOUT_WINDOW_START + (LOADOUT_WINDOW_END - LOADOUT_WINDOW_START) * 0.5;
