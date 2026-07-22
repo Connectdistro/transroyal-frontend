@@ -718,6 +718,35 @@ function createYardBuilding() {
   return group;
 }
 
+/** Low boundary fence -- confirmed present in the reference (separating
+ *  the paved yard from adjacent unpaved land); marks the operational
+ *  yard's own outer edge rather than a full security perimeter (the
+ *  reference itself only shows this one boundary, not a full perimeter --
+ *  see reference/ground/observations.md's own Open Questions). Post+rail,
+ *  zero-allocation repeat, same flat/thin-mesh idiom as every other yard
+ *  marking already in this file. */
+function createBoundaryFence() {
+  const group = new Group();
+  const postMaterial = new MeshStandardMaterial({ color: 0x3a3e46, roughness: 0.6, metalness: 0.3 });
+  const railMaterial = new MeshStandardMaterial({ color: 0x50555f, roughness: 0.5, metalness: 0.3 });
+  const runZ = [SPAWN_WAYPOINT_Z + 14, DOCK_CENTER_Z - 32]; // spans past the parking cluster's own far row (z=-340)
+  // Just past the highway/apron's own west edge (asphalt spans x -26..34)
+  // so the fence marks the yard's actual boundary rather than sitting on
+  // the pavement.
+  const fenceX = -28;
+  const length = runZ[0] - runZ[1];
+  const postCount = Math.round(length / 4);
+  for (let i = 0; i <= postCount; i += 1) {
+    const post = new Mesh(new BoxGeometry(0.12, 1.4, 0.12), postMaterial);
+    post.position.set(fenceX, 0.7, runZ[0] - i * (length / postCount));
+    group.add(post);
+  }
+  const rail = new Mesh(new BoxGeometry(0.08, 0.08, length), railMaterial);
+  rail.position.set(fenceX, 1.1, (runZ[0] + runZ[1]) / 2);
+  group.add(rail);
+  return group;
+}
+
 /** Sells "a queue," not just one waiting truck -- static dressing further
  *  back along the queue lane's own line, past where the live queued
  *  truck (wired in a later step) will sit. Same technique proven earlier
@@ -969,6 +998,7 @@ export class GroundEnvironment {
     // Ground Chapter Reference Pass: the yard building the service
     // vehicle's own point B is now targeted at (see SERVICE_POINT_B).
     this.group.add(createYardBuilding());
+    this.group.add(createBoundaryFence());
 
     // Ground Chapter Full Rebuild, Step 7: the dock cycle's two
     // choreographed rigs, recycled from a small pool the same way the
