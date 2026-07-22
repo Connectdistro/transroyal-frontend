@@ -200,11 +200,18 @@ function createHighway() {
 
   // Lane dividers -- dashed strips, reusing the electric route-line color
   // so the highway itself reads as part of the same light-trail motif.
+  // Ground Road Structure Pass: extended from just the highway's own span
+  // to the FULL corridor (EXIT_GATE_Z..ENTRY_BOUNDARY_Z, now paved
+  // end to end via the transition apron) so the road reads as one
+  // continuously marked structure, not a marked highway plus unmarked
+  // aprons. Same 6.4-unit spacing as before, just more repetitions.
   const dashMaterial = new MeshBasicMaterial({ color: OFFWHITE_100, transparent: true, opacity: 0.35 });
+  const dashSpan = ENTRY_BOUNDARY_Z - EXIT_GATE_Z;
+  const dashCount = Math.ceil(dashSpan / 6.4);
   [-11, 0.5, 12].forEach((x) => {
-    for (let i = 0; i < 16; i += 1) {
+    for (let i = 0; i < dashCount; i += 1) {
       const dash = new Mesh(new BoxGeometry(0.25, 0.05, 2), dashMaterial);
-      dash.position.set(x, 0.02, REGION_Z - HIGHWAY_LENGTH / 2 + i * 6.4);
+      dash.position.set(x, 0.02, EXIT_GATE_Z + i * 6.4);
       group.add(dash);
     }
   });
