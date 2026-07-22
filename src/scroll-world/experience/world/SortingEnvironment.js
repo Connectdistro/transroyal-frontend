@@ -104,6 +104,34 @@ function createMezzanineFloor() {
   return floor;
 }
 
+// Pickup/Sorting Continuity Pass: Pickup's own dock floor (createDockFloor,
+// PickupEnvironment.js) is a BoxGeometry(34, 0.4, 30) centered on its own
+// REGION_Z=-95, so it physically ends at world z=-80. This file's own
+// floor begins at its own near edge z=-154 (REGION_Z - 26). Confirmed
+// live: nothing exists between -80 and -154 -- not even asphalt, the same
+// gap Ground and Sorting had before their own transition-apron fix.
+const PICKUP_APRON_NEAR_Z = -80; // Pickup's own dock floor edge
+const PICKUP_APRON_FAR_Z = -154; // this file's own floor edge
+
+/** Static floor connector across the Pickup/Sorting gap -- same technique
+ *  as GroundEnvironment.js's own createTransitionApron() (each chapter
+ *  file stays self-contained per this codebase's convention, so this
+ *  isn't imported, just the same idiom repeated). PickupEnvironment.js's
+ *  DOCK_COLOR and this file's own FLOOR_COLOR are the identical hex
+ *  already, so this reads as one continuous surface arriving from
+ *  Pickup, not a new patch. Matches this file's own widened floor width
+ *  (66) so the seam at z=-154 lines up edge-to-edge. */
+function createPickupTransitionApron() {
+  const length = PICKUP_APRON_NEAR_Z - PICKUP_APRON_FAR_Z;
+  const centerZ = (PICKUP_APRON_NEAR_Z + PICKUP_APRON_FAR_Z) / 2;
+  const material = new MeshPhysicalMaterial({ color: FLOOR_COLOR, metalness: 0.1, roughness: 0.9, clearcoat: 0 });
+  varyMaterial(material, 615);
+  const apron = new Mesh(new BoxGeometry(66, 0.3, length), material);
+  apron.position.set(0, -0.3, centerZ);
+  apron.receiveShadow = true;
+  return apron;
+}
+
 /** Repeating structural bays over the sorting line (Addendum 32.4: the same
  *  rib module as Origin and Pickup, at this location's own scale) -- scan
  *  arches straddling the conveyors, receding toward a hazy vanishing point. */
@@ -308,7 +336,15 @@ export class SortingEnvironment {
     this.conveyors = createConveyors();
     this.diverter = createDiverter();
     this.routeLine = createRouteLine();
-    this.group.add(createMezzanineFloor(), createFloorDetail(), this.arches, this.conveyors, this.diverter, this.routeLine);
+    this.group.add(
+      createMezzanineFloor(),
+      createPickupTransitionApron(),
+      createFloorDetail(),
+      this.arches,
+      this.conveyors,
+      this.diverter,
+      this.routeLine
+    );
 
     // Track A2's own decision-moment target: the one parcel that diverts
     // every lap (see DIVERTER_LINE_INDEX/DIVERTER_PARCEL_LOCAL_INDEX above).
