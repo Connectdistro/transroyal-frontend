@@ -529,10 +529,74 @@ function createForkliftCorridorMarkings() {
 // bay's own x exactly (both equal DOCK_CENTER_X) so a docked truck lines
 // up with the door dead-on.
 const DOCK_LANE_X = DOCK_CENTER_X;
-const QUEUE_LANE_X = DOCK_LANE_X - 4;
+// Ground Chapter Composition Pass: widened from DOCK_LANE_X-4 -- from the
+// fixed ground camera (view axis dominated by world Z), the two dock-cycle
+// rigs read as one merged silhouette at only 4 units of lateral spread.
+// Checked clear of everything else at this x/z: Wing A's wall footprint
+// (world x -10..14) does overlap this x, but only at z -310.5..-304.5
+// (the building itself), 16+ units of Z away from where a queued truck
+// actually sits (QUEUE_WAYPOINT_Z=-288) or spawns (SPAWN_WAYPOINT_Z=-278);
+// highway lanes (-19,-15,23,29) and the parking cluster (x 0-8, z
+// -330/-340) are untouched.
+const QUEUE_LANE_X = DOCK_LANE_X - 8;
 const DOCK_TRUCK_WAYPOINT_Z = DOCK_CENTER_Z + 6;
 const QUEUE_WAYPOINT_Z = DOCK_CENTER_Z + 22;
 const SPAWN_WAYPOINT_Z = DOCK_CENTER_Z + 32;
+
+// Ground Chapter Composition Pass: the dock/queue role swap (updateDockCycle,
+// on entering 'arrive') relabels which physical rig is "dockTruck" vs
+// "queuedTruck" without moving either -- each then eases toward the OTHER's
+// old lane+Z target. If X and Z shared the same half-life, the X gap between
+// them would hit exactly zero at t = one half-life into 'arrive'
+// (worked the closed-form damped-lerp trajectory to confirm), and at that
+// same moment the Z gap would only be ~half its final value -- both rigs'
+// ~10.2-unit footprints (cargo BoxGeometry(3,3,8) + cab BoxGeometry(2.6,2.4,2.2)
+// offset to local z=+5) would provably overlap. Widening the lanes alone
+// can't fix this: a full role swap means the two rigs' X positions MUST
+// trade sides (start on opposite sides of 0, end on opposite sides of 0),
+// so by the intermediate value theorem their X gap is guaranteed to cross
+// zero at some point regardless of how far apart the lanes are -- and a
+// simple push-apart correction on X can't prevent that crossing either,
+// only how hard it's fought (numerically confirmed: an earlier draft of
+// this fix that only pushed X apart still produced worse overlap than no
+// guard at all, because it couldn't out-fight a crossing that's
+// mathematically forced).
+//
+// The fix that actually works: let Z open its gap faster than X closes.
+// LANE_SWAP_HALF_LIFE_MS gives the X-lane transition its own, much slower,
+// half-life than DOCK_MOTION_HALF_LIFE_MS's 900ms Z motion -- so by the
+// time X reaches its own crossing point, Z has already had 3x longer to
+// separate. Numerically verified (fixed 16ms steps, worst-case start
+// condition of both rigs at identical Z): worst-case footprint overlap is
+// exactly zero at this half-life, with margin to spare. Doesn't touch
+// steady-state lane-holding -- both rigs already sit exactly on their own
+// lane's X outside a swap, so this only slows how fast a *deviation*
+// corrects, which only matters during the swap itself.
+const LANE_SWAP_HALF_LIFE_MS = 3000;
+
+const TRUCK_MIN_SEPARATION_X = 4.4; // > combined half-widths (1.6+1.6=3.2), ~1.2 margin
+const TRUCK_MIN_SEPARATION_Z = 12; // > combined footprint length (~10.2) -- gates whether overlap is even geometrically possible
+const SEPARATION_HALF_LIFE_MS = 220; // snappier corrective ease than DOCK_MOTION_HALF_LIFE_MS's 900, but still a damped ease -- never a hard snap
+
+/** Defense-in-depth on top of LANE_SWAP_HALF_LIFE_MS -- same damped-lerp
+ *  idiom as every other motion in this file, applied to a minimum-gap
+ *  target instead of a fixed waypoint. No-ops whenever the Z gap already
+ *  makes overlap geometrically impossible (true almost all of the time).
+ *  Cannot by itself prevent the X crossing (see LANE_SWAP_HALF_LIFE_MS's
+ *  comment -- that's the actual fix); this only adds extra separation
+ *  speed on either side of it. dockTruck is always nudged toward +X,
+ *  queuedTruck toward -X -- matches their steady-state lane assignment
+ *  (DOCK_LANE_X > QUEUE_LANE_X), so the push direction stays deterministic
+ *  even exactly at dx === 0. */
+function maintainDockQueueSeparation(dockTruck, queuedTruck, correctionT) {
+  const dz = dockTruck.position.z - queuedTruck.position.z;
+  if (Math.abs(dz) >= TRUCK_MIN_SEPARATION_Z) return;
+  const dx = dockTruck.position.x - queuedTruck.position.x;
+  if (Math.abs(dx) >= TRUCK_MIN_SEPARATION_X) return;
+  const shortfall = (TRUCK_MIN_SEPARATION_X - Math.abs(dx)) * 0.5;
+  dockTruck.position.x += shortfall * correctionT;
+  queuedTruck.position.x -= shortfall * correctionT;
+}
 
 // Ground Chapter Full Rebuild, Step 7: the service vehicle's own two-
 // point trip -- proven mechanism from the vehicle-organization pass,
@@ -976,9 +1040,17 @@ export class GroundEnvironment {
     this.queuedTruck.position.z += queuedTruckDeltaZ * motionT;
 
     // Lane discipline -- ease each rig's X toward whichever lane its
-    // CURRENT role implies.
-    this.dockTruck.position.x += (DOCK_LANE_X - this.dockTruck.position.x) * motionT;
-    this.queuedTruck.position.x += (QUEUE_LANE_X - this.queuedTruck.position.x) * motionT;
+    // CURRENT role implies. Deliberately its own (slower) half-life, not
+    // `motionT` -- see LANE_SWAP_HALF_LIFE_MS's own comment: this is what
+    // lets Z separation open up before the X crossing a role swap forces.
+    const laneT = dampFactor(LANE_SWAP_HALF_LIFE_MS, time.delta);
+    this.dockTruck.position.x += (DOCK_LANE_X - this.dockTruck.position.x) * laneT;
+    this.queuedTruck.position.x += (QUEUE_LANE_X - this.queuedTruck.position.x) * laneT;
+
+    // Anti-interpenetration guard -- see maintainDockQueueSeparation's own
+    // comment. Runs after lane discipline so it corrects the position that
+    // motion actually landed on this frame, not a stale one.
+    maintainDockQueueSeparation(this.dockTruck, this.queuedTruck, dampFactor(SEPARATION_HALF_LIFE_MS, time.delta));
 
     // Departure heading turn -- a departing truck backs out, then turns
     // to face its real direction of travel once clear of the dock.
