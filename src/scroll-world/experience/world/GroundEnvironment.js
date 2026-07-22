@@ -65,6 +65,16 @@ const TRANSITION_APRON_FAR_Z = -280;
 const LANE_X = [-19, -15, 23, 29];
 const FLEET_SPEED = 6.5;
 const VELOCITY_HALF_LIFE_MS = 300;
+// Ground Chapter Cross-Chapter Continuity Pass: was symmetric
+// (REGION_Z +/- HIGHWAY_LENGTH/2); the near edge now extends into the
+// transition apron (paved since the Sorting/Ground Link Pass -- see
+// TRANSITION_APRON_NEAR_Z/FAR_Z) so the fleet is already visibly moving
+// well before the camera crosses into Ground's own section -- one
+// continuous journey, not a hard start. Left a 10-unit margin before
+// TRANSITION_APRON_NEAR_Z (Sorting's own floor edge) so a truck never
+// reads as driving into Sorting's interior.
+const FLEET_NEAR_WRAP_Z = TRANSITION_APRON_NEAR_Z + 10;
+const FLEET_FAR_WRAP_Z = REGION_Z - HIGHWAY_LENGTH / 2;
 const WRAP_TAPER_DISTANCE = HIGHWAY_LENGTH * 0.12;
 const MIN_TAPER_FACTOR = 0.15;
 const BRAKE_DIVE_AMPLITUDE = 0.035;
@@ -1137,19 +1147,18 @@ export class GroundEnvironment {
     this.routeLine.material.opacity = this.routeLine.material.userData.baseOpacity * routePulse;
 
     const deltaSeconds = time.delta / 1000;
-    const halfLength = HIGHWAY_LENGTH / 2;
     const velocityT = dampFactor(VELOCITY_HALF_LIFE_MS, time.delta);
     this.fleet.userData.trucks.forEach((truck, truckIndex) => {
       const distanceToWrap =
-        truck.userData.direction > 0 ? REGION_Z + halfLength - truck.position.z : truck.position.z - (REGION_Z - halfLength);
+        truck.userData.direction > 0 ? FLEET_NEAR_WRAP_Z - truck.position.z : truck.position.z - FLEET_FAR_WRAP_Z;
       const taper = Math.max(MIN_TAPER_FACTOR, Math.min(1, distanceToWrap / WRAP_TAPER_DISTANCE));
       const desiredSpeed = truck.userData.targetSpeed * taper;
       truck.userData.speed += (desiredSpeed - truck.userData.speed) * velocityT;
 
       const truckDeltaZ = truck.userData.speed * truck.userData.direction * deltaSeconds;
       truck.position.z += truckDeltaZ;
-      if (truck.position.z > REGION_Z + halfLength) truck.position.z = REGION_Z - halfLength;
-      if (truck.position.z < REGION_Z - halfLength) truck.position.z = REGION_Z + halfLength;
+      if (truck.position.z > FLEET_NEAR_WRAP_Z) truck.position.z = FLEET_FAR_WRAP_Z;
+      if (truck.position.z < FLEET_FAR_WRAP_Z) truck.position.z = FLEET_NEAR_WRAP_Z;
 
       rollWheels(truck.userData.wheels, truckDeltaZ, TRUCK_WHEEL_RADIUS);
 
