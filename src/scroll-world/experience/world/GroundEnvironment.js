@@ -687,7 +687,11 @@ const PALLET_SETTLE_PERIOD_MS = 260;
 // margin to spare, and the settle bounce is still a brief overshoot, not a
 // bigger cargo box.
 const PALLET_SETTLE_AMPLITUDE = 0.14;
-const FORKLIFT_TRIP_PERIOD_MS = [2600, 3100];
+// Ground Chapter Composition Pass: quickened from [2600, 3100] -- more
+// round trips visible across the 8s unload window (PHASE_DOCK_OPEN_END to
+// PHASE_UNLOAD_END), reading as busier without changing the DROP/PICKUP
+// waypoints themselves.
+const FORKLIFT_TRIP_PERIOD_MS = [2200, 2700];
 const FORKLIFT_LIFT_HEIGHT = 0.95;
 const LOADOUT_WINDOW_START = PHASE_UNLOAD_END;
 const LOADOUT_WINDOW_END = PHASE_DEPART_END - 2000;
