@@ -747,6 +747,24 @@ function createBoundaryFence() {
   return group;
 }
 
+/** Painted yard markings confirmed in the reference (a crosshatched keep-
+ *  clear zone) -- same flat-decal idiom as createForkliftCorridorMarkings()/
+ *  the highway's own lane dashes, not a new visual language. Placed at the
+ *  parking cluster's own approach, where a real yard would mark a no-
+ *  stopping zone in front of a working area. */
+function createYardMarkings() {
+  const group = new Group();
+  const paintMaterial = new MeshBasicMaterial({ color: OFFWHITE_100, transparent: true, opacity: 0.3 });
+  const hatchCenter = { x: 4, z: PARKING_ROWS_Z[0] + 6 };
+  for (let i = -2; i <= 2; i += 1) {
+    const hatch = new Mesh(new BoxGeometry(0.15, 0.02, 3), paintMaterial);
+    hatch.rotation.y = Math.PI / 4;
+    hatch.position.set(hatchCenter.x + i * 1.4, 0.01, hatchCenter.z);
+    group.add(hatch);
+  }
+  return group;
+}
+
 /** Sells "a queue," not just one waiting truck -- static dressing further
  *  back along the queue lane's own line, past where the live queued
  *  truck (wired in a later step) will sit. Same technique proven earlier
@@ -999,6 +1017,7 @@ export class GroundEnvironment {
     // vehicle's own point B is now targeted at (see SERVICE_POINT_B).
     this.group.add(createYardBuilding());
     this.group.add(createBoundaryFence());
+    this.group.add(createYardMarkings());
 
     // Ground Chapter Full Rebuild, Step 7: the dock cycle's two
     // choreographed rigs, recycled from a small pool the same way the
