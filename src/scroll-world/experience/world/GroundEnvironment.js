@@ -39,6 +39,17 @@ const ASPHALT_COLOR = 0x232428;
 const HUB_COLOR = 0x565b66;
 const RUBBER_COLOR = 0x05070f;
 const HIGHWAY_LENGTH = 100;
+// Sorting/Ground Link Pass: SortingEnvironment.js's own mezzanine floor
+// (BoxGeometry(30, 0.4, CONVEYOR_LENGTH+6=52), centered on its own
+// REGION_Z=-180) physically ends at world z=-206; this file's own highway
+// asphalt (below) starts at z=-280 (REGION_Z - HIGHWAY_LENGTH/2). Checked
+// live: nothing exists in between -- not even asphalt, just void, despite
+// Sorting's own route line being built to hand off exactly at -206 (see
+// its own createRouteLine() comment). This was fixed once already
+// (pre-rebuild commit cc62faa) and silently dropped when Ground was fully
+// rebuilt this session; these two constants are unchanged from that fix.
+const TRANSITION_APRON_NEAR_Z = -206;
+const TRANSITION_APRON_FAR_Z = -280;
 // Ground Chapter Full Rebuild, Step 3 fix: re-checked live against the
 // new angled warehouse's own MEASURED bounds (world x -10.2 to 22.4,
 // read via a per-mesh traversal, not estimated) -- the original Step 2
@@ -177,6 +188,27 @@ function createHighway() {
   });
 
   return group;
+}
+
+/** Static floor connector across the Sorting/Ground gap (see
+ *  TRANSITION_APRON_NEAR_Z/FAR_Z) -- its own mesh, deliberately NOT folded
+ *  into createHighway()/HIGHWAY_LENGTH, so the fleet's own wrap
+ *  boundaries/timing stay untouched. Same asphalt material AND footprint
+ *  as the highway's own asphalt (60 wide, centered x=4) so the seam at
+ *  z=-280 lines up edge-to-edge -- comfortably wider than Sorting's own
+ *  30-unit floor too, so the near-end seam at z=-206 has no gap either.
+ *  Sorting's FLOOR_COLOR and this file's ASPHALT_COLOR are the identical
+ *  hex already, so this reads as one continuous paved surface arriving
+ *  from Sorting, not a new patch. */
+function createTransitionApron() {
+  const length = TRANSITION_APRON_NEAR_Z - TRANSITION_APRON_FAR_Z;
+  const centerZ = (TRANSITION_APRON_NEAR_Z + TRANSITION_APRON_FAR_Z) / 2;
+  const material = new MeshPhysicalMaterial({ color: ASPHALT_COLOR, metalness: 0.1, roughness: 0.9, clearcoat: 0 });
+  varyMaterial(material, 610);
+  const apron = new Mesh(new BoxGeometry(60, 0.3, length), material);
+  apron.position.set(4, -0.15, centerZ);
+  apron.receiveShadow = true;
+  return apron;
 }
 
 /** A fleet in constant, layered motion (Section 23: "the busiest midground
@@ -822,7 +854,7 @@ export class GroundEnvironment {
     // this chapter's own camera sightline before anything else is built
     // against it.
     this.fleet = createFleet();
-    this.group.add(createHighway(), createHubSilhouettes(), this.fleet);
+    this.group.add(createHighway(), createTransitionApron(), createHubSilhouettes(), this.fleet);
 
     // Ground Chapter Full Rebuild, Step 3: the angled two-wing warehouse +
     // dense dock row -- the defining shape from the real reference
