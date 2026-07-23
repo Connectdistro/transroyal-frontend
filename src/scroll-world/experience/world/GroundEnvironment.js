@@ -240,6 +240,43 @@ function createTransitionApron() {
   return apron;
 }
 
+// Ground Airport Pass: continues the road past EXIT_GATE_Z (-380) into a
+// dedicated apron for the parked aircraft -- centered at x=7, width 16
+// (world x -1..15), threading the real 20-unit gap between the two
+// existing hub silhouettes (createHubSilhouettes: world x 17..35 and
+// -13..-3) with 2-unit clearance on each side, confirmed against their
+// actual positions, not assumed clear. Deliberately narrower than the
+// 60-unit highway -- this is a single taxiway to a specific parking spot,
+// not a multi-lane road, so it gets its own centerline marking instead of
+// the highway's 3-lane-divider pattern.
+const APRON_NEAR_Z = EXIT_GATE_Z;
+const APRON_FAR_Z = -435;
+const APRON_CENTER_X = 7;
+const APRON_WIDTH = 16;
+
+function createAirportApron() {
+  const group = new Group();
+  const length = APRON_NEAR_Z - APRON_FAR_Z;
+  const centerZ = (APRON_NEAR_Z + APRON_FAR_Z) / 2;
+  const material = new MeshPhysicalMaterial({ color: ASPHALT_COLOR, metalness: 0.1, roughness: 0.9, clearcoat: 0 });
+  varyMaterial(material, 640);
+  const apron = new Mesh(new BoxGeometry(APRON_WIDTH, 0.3, length), material);
+  apron.position.set(APRON_CENTER_X, -0.15, centerZ);
+  apron.receiveShadow = true;
+  group.add(apron);
+
+  // Centerline dashes -- same mesh/material idiom as the highway's own
+  // lane dividers, single line down the taxiway's own middle.
+  const dashMaterial = new MeshBasicMaterial({ color: OFFWHITE_100, transparent: true, opacity: 0.35 });
+  const dashCount = Math.ceil(length / 6.4);
+  for (let i = 0; i < dashCount; i += 1) {
+    const dash = new Mesh(new BoxGeometry(0.25, 0.05, 2), dashMaterial);
+    dash.position.set(APRON_CENTER_X, 0.02, APRON_NEAR_Z - i * 6.4);
+    group.add(dash);
+  }
+  return group;
+}
+
 /** A fleet in constant, layered motion (Section 23: "the busiest midground
  *  of the entire journey"). Each truck holds its lane and speed, wrapping
  *  from the far end back to the near end -- purposeful motion, not
@@ -1084,7 +1121,14 @@ export class GroundEnvironment {
     // against it.
     this.fleet = createFleet();
     this.routeLine = createRouteLine();
-    this.group.add(createHighway(), createTransitionApron(), createHubSilhouettes(), this.fleet, this.routeLine);
+    this.group.add(
+      createHighway(),
+      createTransitionApron(),
+      createAirportApron(),
+      createHubSilhouettes(),
+      this.fleet,
+      this.routeLine
+    );
 
     // Ground Chapter Full Rebuild, Step 3: the angled two-wing warehouse +
     // dense dock row -- the defining shape from the real reference
