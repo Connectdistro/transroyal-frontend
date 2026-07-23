@@ -277,6 +277,142 @@ function createAirportApron() {
   return group;
 }
 
+// Ground Airport Pass: parked well past both hub silhouettes (which end
+// by z=-407) and centered in the apron's own remaining length.
+const AIRCRAFT_PARK_X = APRON_CENTER_X;
+const AIRCRAFT_PARK_Z = -415;
+// Matches AirEnvironment.js's own FUSELAGE_COLOR/ENGINE_COLOR exactly --
+// "the same plane," the same cross-file color-echo convention this
+// codebase already uses (no import, just the identical hex).
+const AIRCRAFT_FUSELAGE_COLOR = 0xd4dbe8;
+const AIRCRAFT_ENGINE_COLOR = 0x14181f;
+const AIRCRAFT_MODEL_ROTATION_Y = Math.PI;
+// AirEnvironment.js's own cargoPlane GLB has a raw wingspan of 60.18,
+// scaled to a 24-unit wingspan there -- reusing the identical scale here
+// gives "the same plane," not a differently-sized one.
+const AIRCRAFT_MODEL_SCALE = 24 / 60.18;
+
+/** A parked, stationary aircraft on the new apron -- background/secondary
+ *  (this chapter's hero is the dock truck, not the plane), so a simpler
+ *  procedural placeholder than AirEnvironment.js's own hero-detail hull,
+ *  same fuselage/wing/tail massing and exact color values for visual
+ *  continuity. Real GLB swap follows the identical technique
+ *  applyTruckModel() already established (procedural hull renders
+ *  immediately, hidden once the real model loads). */
+function createParkedAircraft() {
+  const group = new Group();
+  const fuselageMaterial = new MeshStandardMaterial({ color: AIRCRAFT_FUSELAGE_COLOR, roughness: 0.35, metalness: 0.45 });
+  varyMaterial(fuselageMaterial, 720);
+  const fuselage = new Mesh(new BoxGeometry(3.2, 3.2, 16), fuselageMaterial);
+  fuselage.position.set(0, 2, 0);
+  fuselage.castShadow = true;
+  group.add(fuselage);
+
+  const nose = new Mesh(new CylinderGeometry(0.15, 1.6, 3, 8), fuselageMaterial);
+  nose.rotation.x = -Math.PI / 2;
+  nose.position.set(0, 2, -9.4);
+  group.add(nose);
+
+  const wingMaterial = new MeshStandardMaterial({ color: AIRCRAFT_ENGINE_COLOR, roughness: 0.45, metalness: 0.4 });
+  const wings = new Mesh(new BoxGeometry(24, 0.4, 3.4), wingMaterial);
+  wings.position.set(0, 1.7, 0.5);
+  group.add(wings);
+
+  const tailVertical = new Mesh(new BoxGeometry(0.3, 3, 2.4), wingMaterial);
+  tailVertical.position.set(0, 3.5, 7.2);
+  const tailHorizontal = new Mesh(new BoxGeometry(7.5, 0.3, 1.8), wingMaterial);
+  tailHorizontal.position.set(0, 3.2, 7.2);
+  group.add(tailVertical, tailHorizontal);
+
+  group.userData.hullMeshes = [fuselage, nose, wings, tailVertical, tailHorizontal];
+  return group;
+}
+
+/** Real cargoPlane GLB swap -- same recenter/flip/scale technique as
+ *  AirEnvironment.js's own applyCargoPlaneModel() (same source file, same
+ *  quirk: its own rear cargo-ramp "DropDoor" part is authored far below
+ *  the main body and reads as a dangling appendage after scaling, so it's
+ *  removed outright before computing the bounding box, not just hidden). */
+function applyAircraftModel(aircraftGroup, scene) {
+  const dropDoors = [];
+  scene.traverse((child) => {
+    if (child.name.toLowerCase().includes('dropdoor')) dropDoors.push(child);
+  });
+  dropDoors.forEach((node) => node.parent?.remove(node));
+
+  const box = new Box3().setFromObject(scene);
+  const center = box.getCenter(new Vector3());
+
+  const recenter = new Group();
+  scene.position.sub(center);
+  recenter.add(scene);
+
+  const flip = new Group();
+  flip.rotation.y = AIRCRAFT_MODEL_ROTATION_Y;
+  flip.add(recenter);
+
+  const container = new Group();
+  container.scale.setScalar(AIRCRAFT_MODEL_SCALE);
+  container.add(flip);
+
+  scene.traverse((child) => {
+    if (child.isMesh) child.castShadow = true;
+  });
+
+  aircraftGroup.userData.hullMeshes.forEach((mesh) => {
+    mesh.visible = false;
+  });
+  aircraftGroup.add(container);
+}
+
+// Ground Airport Pass: one ground-support piece beside the parked
+// aircraft -- static dressing only (same idle-motion-only technique as
+// createParkingCluster()'s own trucks), not animated cargo-loading
+// choreography, which is beyond this pass's scope.
+const GPU_PARK_OFFSET = { x: -5, z: 2 };
+const GPU_TARGET_LENGTH = 2.2;
+
+/** Small procedural placeholder for the ground power unit -- swapped for
+ *  the real groundPowerUnit GLB once loaded, same technique as
+ *  applyAircraftModel()/applyTruckModel() but scaled dynamically to its
+ *  own much smaller target length (unlike the aircraft's fixed wingspan
+ *  scale, this asset's own raw dimensions aren't already known from a
+ *  sibling file, so it's measured live like the truck model is). */
+function createGroundPowerUnitPlaceholder() {
+  const group = new Group();
+  const bodyMaterial = new MeshStandardMaterial({ color: HUB_COLOR, roughness: 0.6, metalness: 0.3 });
+  varyMaterial(bodyMaterial, 725);
+  const body = new Mesh(new BoxGeometry(1.4, 1.2, 2), bodyMaterial);
+  body.position.set(0, 0.6, 0);
+  body.castShadow = true;
+  group.add(body);
+  group.userData.hullMeshes = [body];
+  return group;
+}
+
+function applyGroundPowerUnitModel(gpuGroup, scene) {
+  const box = new Box3().setFromObject(scene);
+  const center = box.getCenter(new Vector3());
+  scene.position.x -= center.x;
+  scene.position.z -= center.z;
+  scene.position.y -= box.min.y;
+
+  const size = box.getSize(new Vector3());
+  const scale = GPU_TARGET_LENGTH / Math.max(size.x, size.z);
+  const container = new Group();
+  container.scale.setScalar(scale);
+  container.add(scene);
+
+  scene.traverse((child) => {
+    if (child.isMesh) child.castShadow = true;
+  });
+
+  gpuGroup.userData.hullMeshes.forEach((mesh) => {
+    mesh.visible = false;
+  });
+  gpuGroup.add(container);
+}
+
 /** A fleet in constant, layered motion (Section 23: "the busiest midground
  *  of the entire journey"). Each truck holds its lane and speed, wrapping
  *  from the far end back to the near end -- purposeful motion, not
@@ -1129,6 +1265,30 @@ export class GroundEnvironment {
       this.fleet,
       this.routeLine
     );
+
+    // Ground Airport Pass: the parked aircraft at the apron's own far end.
+    // Procedural hull renders immediately; the real cargoPlane GLB (same
+    // asset AirEnvironment.js uses) swaps in once loaded, same
+    // load-then-clone pattern as deliveryVan below.
+    this.parkedAircraft = createParkedAircraft();
+    this.parkedAircraft.position.set(AIRCRAFT_PARK_X, 0, AIRCRAFT_PARK_Z);
+    this.group.add(this.parkedAircraft);
+    this.experience.resources.load('cargoPlane').then(() => {
+      const clone = this.experience.resources.clone('cargoPlane');
+      if (!clone) return;
+      applyAircraftModel(this.parkedAircraft, clone.scene);
+    });
+
+    // One ground-support piece beside it -- static dressing, same
+    // load-then-clone swap technique, smaller/simpler placeholder.
+    this.groundPowerUnit = createGroundPowerUnitPlaceholder();
+    this.groundPowerUnit.position.set(AIRCRAFT_PARK_X + GPU_PARK_OFFSET.x, 0, AIRCRAFT_PARK_Z + GPU_PARK_OFFSET.z);
+    this.group.add(this.groundPowerUnit);
+    this.experience.resources.load('groundPowerUnit').then(() => {
+      const clone = this.experience.resources.clone('groundPowerUnit');
+      if (!clone) return;
+      applyGroundPowerUnitModel(this.groundPowerUnit, clone.scene);
+    });
 
     // Ground Chapter Full Rebuild, Step 3: the angled two-wing warehouse +
     // dense dock row -- the defining shape from the real reference
