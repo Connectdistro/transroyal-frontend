@@ -281,6 +281,17 @@ function createAirportApron() {
 // by z=-407) and centered in the apron's own remaining length.
 const AIRCRAFT_PARK_X = APRON_CENTER_X;
 const AIRCRAFT_PARK_Z = -415;
+// Where the dock truck actually stops -- deliberately NOT the same Z as
+// the aircraft's own center. The wings (BoxGeometry(24,0.4,3.4) at local
+// z=0.5) sit at world z -416.2..-412.8, which the dock lane's own x=2
+// falls well within (the wingspan is 24 wide, centered on the aircraft's
+// x=7) -- a truck stopping at AIRCRAFT_PARK_Z itself would clip straight
+// through a wing. The tail is the plane's own nearest-to-Ground point
+// (local z=+7.2 -> world z=-407.8, the closest part of the whole
+// airframe), so the truck stops just short of it instead, near the
+// tail/cargo-door end -- both geometrically clear and the more realistic
+// place for a truck to actually queue for cargo transfer.
+const TRUCK_APRON_STOP_Z = -398;
 // Matches AirEnvironment.js's own FUSELAGE_COLOR/ENGINE_COLOR exactly --
 // "the same plane," the same cross-file color-echo convention this
 // codebase already uses (no import, just the identical hex).
@@ -1565,14 +1576,21 @@ export class GroundEnvironment {
     // corridor loop instead of a short round-trip to a nearby spawn point
     // -- arrive just inside ENTRY_STOP_Z, ease to queue, ease to dock,
     // load (the existing forklift/pallet choreography -- "picking up the
-    // sorted shipment"), then depart all the way out to EXIT_GATE_Z (a
-    // real chapter exit, delivery continuing on toward Air) before
-    // recycling back to the entry side. Confirmed live: the existing
-    // damped-lerp reaches ~99% convergence within the existing depart+gap
-    // window even over this much longer distance, so the phase clock
-    // itself didn't need to change.
+    // sorted shipment"), then depart all the way out to TRUCK_APRON_STOP_Z
+    // -- the apron, past EXIT_GATE_Z's own toll gate, stopping just short
+    // of the parked aircraft's own tail (see TRUCK_APRON_STOP_Z's own
+    // comment -- stopping at the aircraft's exact center would clip
+    // through a wing) -- and dwells there through the tail of 'gap'
+    // instead of just tagging the road's edge, before recycling back to
+    // the entry side. Confirmed live: the existing damped-lerp reaches
+    // ~99% convergence within the existing depart+gap window even over
+    // this much longer distance, so the phase clock itself didn't need to
+    // change. EXIT_GATE_Z itself stays untouched -- it's still read by
+    // the highway's own lane-dash span, the background fleet's wrap
+    // boundary, and both toll-gate positions, none of which should follow
+    // the dock truck onto a specific aircraft's own apron.
     this.queuedTruck.userData.targetZ = phase === 'gap' ? ENTRY_STOP_Z : QUEUE_WAYPOINT_Z;
-    this.dockTruck.userData.targetZ = phase === 'depart' || phase === 'gap' ? EXIT_GATE_Z : DOCK_TRUCK_WAYPOINT_Z;
+    this.dockTruck.userData.targetZ = phase === 'depart' || phase === 'gap' ? TRUCK_APRON_STOP_Z : DOCK_TRUCK_WAYPOINT_Z;
     const dockTruckDeltaZ = this.dockTruck.userData.targetZ - this.dockTruck.position.z;
     const queuedTruckDeltaZ = this.queuedTruck.userData.targetZ - this.queuedTruck.position.z;
     this.dockTruck.position.z += dockTruckDeltaZ * motionT;
@@ -1596,10 +1614,11 @@ export class GroundEnvironment {
     const turnT = dampFactor(DEPART_TURN_HALF_LIFE_MS, time.delta);
     [this.dockTruck, this.queuedTruck].forEach((truck) => {
       // Both recycled rigs' "leaving the dock/queue area" targets now
-      // differ (EXIT_GATE_Z for the departing dock truck, ENTRY_STOP_Z
-      // for the truck heading back out to recycle) -- either one means
-      // "departing," not just the single old SPAWN_WAYPOINT_Z value.
-      const isDeparting = truck.userData.targetZ === EXIT_GATE_Z || truck.userData.targetZ === ENTRY_STOP_Z;
+      // differ (TRUCK_APRON_STOP_Z for the departing dock truck,
+      // ENTRY_STOP_Z for the truck heading back out to recycle) -- either
+      // one means "departing," not just the single old SPAWN_WAYPOINT_Z
+      // value.
+      const isDeparting = truck.userData.targetZ === TRUCK_APRON_STOP_Z || truck.userData.targetZ === ENTRY_STOP_Z;
       const clearOfDock = truck.position.z >= DOCK_TRUCK_WAYPOINT_Z + DEPART_REVERSE_DISTANCE;
       truck.userData.headingY = isDeparting && clearOfDock ? 0 : Math.PI;
       truck.rotation.y += (truck.userData.headingY - truck.rotation.y) * turnT;
